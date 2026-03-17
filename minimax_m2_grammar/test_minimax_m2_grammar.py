@@ -25,6 +25,7 @@ def compiles(grammar_str: str) -> xgr.Grammar:
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
+
 def tool_call(*invocations: str) -> str:
     body = "\n".join(invocations)
     return f"<minimax:tool_call>\n{body}</minimax:tool_call>\n"
@@ -45,21 +46,37 @@ def param(name: str, value: str) -> str:
 
 
 class TestCompilation(unittest.TestCase):
-
     def test_single_tool(self):
-        tools = [{"name": "f", "parameters": {
-            "type": "object",
-            "properties": {"x": {"type": "string"}},
-            "required": ["x"],
-        }}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"type": "string"}},
+                    "required": ["x"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_multiple_tools(self):
         tools = [
-            {"name": "a", "parameters": {"type": "object",
-                "properties": {"x": {"type": "string"}}, "required": ["x"]}},
-            {"name": "b", "parameters": {"type": "object",
-                "properties": {"y": {"type": "integer"}}, "required": ["y"]}},
+            {
+                "name": "a",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"type": "string"}},
+                    "required": ["x"],
+                },
+            },
+            {
+                "name": "b",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"y": {"type": "integer"}},
+                    "required": ["y"],
+                },
+            },
         ]
         compiles(generate_minimax_tool_grammar(tools))
 
@@ -68,69 +85,151 @@ class TestCompilation(unittest.TestCase):
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_nested_object(self):
-        tools = [{"name": "f", "parameters": {"type": "object", "properties": {
-            "addr": {"type": "object", "properties": {
-                "street": {"type": "string"}, "city": {"type": "string"}
-            }, "required": ["street", "city"]}
-        }, "required": ["addr"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "addr": {
+                            "type": "object",
+                            "properties": {
+                                "street": {"type": "string"},
+                                "city": {"type": "string"},
+                            },
+                            "required": ["street", "city"],
+                        }
+                    },
+                    "required": ["addr"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_anyof(self):
-        tools = [{"name": "f", "parameters": {"type": "object", "properties": {
-            "v": {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}]}
-        }, "required": ["v"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "v": {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}]}
+                    },
+                    "required": ["v"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_type_array(self):
-        tools = [{"name": "f", "parameters": {"type": "object", "properties": {
-            "x": {"type": ["string", "null"]}
-        }, "required": ["x"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"type": ["string", "null"]}},
+                    "required": ["x"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_openai_format(self):
-        tools = [{"type": "function", "function": {
-            "name": "f", "parameters": {"type": "object",
-                "properties": {"x": {"type": "string"}}, "required": ["x"]}
-        }}]
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "f",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"x": {"type": "string"}},
+                        "required": ["x"],
+                    },
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_preamble(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"x": {"type": "string"}}, "required": ["x"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"type": "string"}},
+                    "required": ["x"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools, allow_preamble=True))
 
     def test_ref_defs(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"s": {"$ref": "#/$defs/status"}},
-            "$defs": {"status": {"type": "string", "enum": ["on", "off"]}},
-            "required": ["s"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"s": {"$ref": "#/$defs/status"}},
+                    "$defs": {"status": {"type": "string", "enum": ["on", "off"]}},
+                    "required": ["s"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_recursive_ref(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "value": {"type": "string"},
-                "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
-            },
-            "$defs": {"node": {"type": "object", "properties": {
-                "value": {"type": "string"},
-                "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
-            }, "required": ["value"]}},
-            "required": ["value"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "string"},
+                        "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+                    },
+                    "$defs": {
+                        "node": {
+                            "type": "object",
+                            "properties": {
+                                "value": {"type": "string"},
+                                "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+                            },
+                            "required": ["value"],
+                        }
+                    },
+                    "required": ["value"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_root_ref(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "value": {"type": "string"},
-                "children": {"type": "array", "items": {"$ref": "#"}},
-            },
-            "required": ["value"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "string"},
+                        "children": {"type": "array", "items": {"$ref": "#"}},
+                    },
+                    "required": ["value"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools))
 
     def test_strict_mode(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"x": {"type": "string"}}, "required": ["x"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"type": "string"}},
+                    "required": ["x"],
+                },
+            }
+        ]
         compiles(generate_minimax_tool_grammar(tools, strict=True))
 
     def test_empty_tools_raises(self):
@@ -144,31 +243,36 @@ class TestCompilation(unittest.TestCase):
 
 
 class TestSimpleAcceptance(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "get_weather", "parameters": {
-            "type": "object",
-            "properties": {
-                "location": {"type": "string"},
-                "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
-            },
-            "required": ["location", "unit"],
-        }}]
+        self.tools = [
+            {
+                "name": "get_weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"},
+                        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+                    },
+                    "required": ["location", "unit"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_valid(self):
-        s = tool_call(invoke("get_weather",
-            param("location", "San Francisco"), param("unit", "celsius")))
+        s = tool_call(
+            invoke("get_weather", param("location", "San Francisco"), param("unit", "celsius"))
+        )
         self.assertTrue(accepts(self.grammar, s))
 
     def test_other_enum(self):
-        s = tool_call(invoke("get_weather",
-            param("location", "Tokyo"), param("unit", "fahrenheit")))
+        s = tool_call(
+            invoke("get_weather", param("location", "Tokyo"), param("unit", "fahrenheit"))
+        )
         self.assertTrue(accepts(self.grammar, s))
 
     def test_rejects_invalid_enum(self):
-        s = tool_call(invoke("get_weather",
-            param("location", "Paris"), param("unit", "kelvin")))
+        s = tool_call(invoke("get_weather", param("location", "Paris"), param("unit", "kelvin")))
         self.assertFalse(accepts(self.grammar, s))
 
     def test_rejects_missing_required(self):
@@ -176,8 +280,7 @@ class TestSimpleAcceptance(unittest.TestCase):
         self.assertFalse(accepts(self.grammar, s))
 
     def test_rejects_wrong_function(self):
-        s = tool_call(invoke("get_temp",
-            param("location", "Berlin"), param("unit", "celsius")))
+        s = tool_call(invoke("get_temp", param("location", "Berlin"), param("unit", "celsius")))
         self.assertFalse(accepts(self.grammar, s))
 
     def test_rejects_empty_block(self):
@@ -193,17 +296,21 @@ class TestSimpleAcceptance(unittest.TestCase):
 
 
 class TestOptionalParams(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "search", "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string"},
-                "max_results": {"type": "integer"},
-                "lang": {"type": "string"},
-            },
-            "required": ["query"],
-        }}]
+        self.tools = [
+            {
+                "name": "search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "max_results": {"type": "integer"},
+                        "lang": {"type": "string"},
+                    },
+                    "required": ["query"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_required_only(self):
@@ -211,25 +318,25 @@ class TestOptionalParams(unittest.TestCase):
         self.assertTrue(accepts(self.grammar, s))
 
     def test_required_plus_one(self):
-        s = tool_call(invoke("search",
-            param("query", "xgrammar"), param("max_results", "10")))
+        s = tool_call(invoke("search", param("query", "xgrammar"), param("max_results", "10")))
         self.assertTrue(accepts(self.grammar, s))
 
     def test_all_params(self):
-        s = tool_call(invoke("search",
-            param("query", "grammar"), param("max_results", "5"),
-            param("lang", "en")))
+        s = tool_call(
+            invoke(
+                "search", param("query", "grammar"), param("max_results", "5"), param("lang", "en")
+            )
+        )
         self.assertTrue(accepts(self.grammar, s))
 
     def test_rejects_wrong_order(self):
-        s = tool_call(invoke("search",
-            param("query", "test"), param("lang", "en"),
-            param("max_results", "5")))
+        s = tool_call(
+            invoke("search", param("query", "test"), param("lang", "en"), param("max_results", "5"))
+        )
         self.assertFalse(accepts(self.grammar, s))
 
     def test_skip_first_optional(self):
-        s = tool_call(invoke("search",
-            param("query", "test"), param("lang", "en")))
+        s = tool_call(invoke("search", param("query", "test"), param("lang", "en")))
         self.assertTrue(accepts(self.grammar, s))
 
 
@@ -239,38 +346,108 @@ class TestOptionalParams(unittest.TestCase):
 
 
 class TestMultipleTools(unittest.TestCase):
-
     def setUp(self):
         self.tools = [
-            {"name": "get_weather", "parameters": {"type": "object",
-                "properties": {"location": {"type": "string"}},
-                "required": ["location"]}},
-            {"name": "search", "parameters": {"type": "object",
-                "properties": {"query": {"type": "string"}},
-                "required": ["query"]}},
+            {
+                "name": "get_weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
+            },
+            {
+                "name": "search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            },
+            {
+                "name": "request.get",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string"}},
+                    "required": ["url"],
+                },
+            },
+            {
+                "name": "request.post",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string"}, "body": {"type": "string"}},
+                    "required": ["url", "body"],
+                },
+            },
+            {
+                "name": "another_tool",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"property.name": {"type": "string"}},
+                    "required": ["property.name"],
+                },
+            },
         ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_first_tool(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call(invoke("get_weather", param("location", "NYC")))))
+        self.assertTrue(
+            accepts(self.grammar, tool_call(invoke("get_weather", param("location", "NYC"))))
+        )
 
     def test_second_tool(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call(invoke("search", param("query", "hello")))))
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("search", param("query", "hello")))))
+
+    def test_tool_with_special_char_in_name(self):
+        self.assertTrue(
+            accepts(
+                self.grammar, tool_call(invoke("request.get", param("url", "https://example.com")))
+            )
+        )
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "request.post",
+                        param("url", "https://example.com"),
+                        param("body", "Hello, world!"),
+                    )
+                ),
+            )
+        )
+
+    def test_tool_with_special_char_in_property_name(self):
+        self.assertTrue(
+            accepts(
+                self.grammar, tool_call(invoke("another_tool", param("property.name", "value")))
+            )
+        )
 
     def test_parallel(self):
-        self.assertTrue(accepts(self.grammar, tool_call(
-            invoke("get_weather", param("location", "NYC")),
-            invoke("search", param("query", "weather nyc")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("location", "NYC")),
+                    invoke("search", param("query", "weather nyc")),
+                ),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(
-            invoke("get_weather", param("location", "NYC")),
-            invoke("delete", param("query", "x")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("location", "NYC")),
+                    invoke("delete", param("query", "x")),
+                ),
+            )
+        )
 
     def test_rejects_unknown(self):
-        self.assertFalse(accepts(self.grammar,
-            tool_call(invoke("delete", param("x", "y")))))
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("delete", param("x", "y")))))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -279,61 +456,176 @@ class TestMultipleTools(unittest.TestCase):
 
 
 class TestValueTypes(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "t", "parameters": {"type": "object",
-            "properties": {
-                "s": {"type": "string"}, "i": {"type": "integer"},
-                "n": {"type": "number"}, "b": {"type": "boolean"},
-            },
-            "required": ["s", "i", "n", "b"]}}]
+        self.tools = [
+            {
+                "name": "t",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "s": {"type": "string"},
+                        "i": {"type": "integer"},
+                        "n": {"type": "number"},
+                        "b": {"type": "boolean"},
+                    },
+                    "required": ["s", "i", "n", "b"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_valid(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "hello"), param("i", "42"),
-            param("n", "3.14"), param("b", "true")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "hello"),
+                        param("i", "42"),
+                        param("n", "3.14"),
+                        param("b", "true"),
+                    )
+                ),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "hello"), param("i", "42"),
-            param("n", "3.14"), param("b", "yes")))))
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "hello"), param("i", "3.14"),
-            param("n", "3.14"), param("b", "true")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "hello"),
+                        param("i", "42"),
+                        param("n", "3.14"),
+                        param("b", "yes"),
+                    )
+                ),
+            )
+        )
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "hello"),
+                        param("i", "3.14"),
+                        param("n", "3.14"),
+                        param("b", "true"),
+                    )
+                ),
+            )
+        )
 
     def test_negative_int(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "-7"),
-            param("n", "0"), param("b", "false")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t", param("s", "x"), param("i", "-7"), param("n", "0"), param("b", "false")
+                    )
+                ),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "-7.0"),
-            param("n", "0"), param("b", "false")))))
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "-7"),
-            param("n", "0"), param("b", "0")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "x"),
+                        param("i", "-7.0"),
+                        param("n", "0"),
+                        param("b", "false"),
+                    )
+                ),
+            )
+        )
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("t", param("s", "x"), param("i", "-7"), param("n", "0"), param("b", "0"))
+                ),
+            )
+        )
 
     def test_scientific(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "1"),
-            param("n", "1.5e10"), param("b", "true")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "x"),
+                        param("i", "1"),
+                        param("n", "1.5e10"),
+                        param("b", "true"),
+                    )
+                ),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "1"),
-            param("n", "not_a_number"), param("b", "true")))))
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "1e2"),
-            param("n", "1.5e10"), param("b", "true")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "x"),
+                        param("i", "1"),
+                        param("n", "not_a_number"),
+                        param("b", "true"),
+                    )
+                ),
+            )
+        )
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "x"),
+                        param("i", "1e2"),
+                        param("n", "1.5e10"),
+                        param("b", "true"),
+                    )
+                ),
+            )
+        )
 
     def test_rejects_string_for_int(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "abc"),
-            param("n", "1.0"), param("b", "true")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t",
+                        param("s", "x"),
+                        param("i", "abc"),
+                        param("n", "1.0"),
+                        param("b", "true"),
+                    )
+                ),
+            )
+        )
 
     def test_rejects_string_for_bool(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
-            param("s", "x"), param("i", "1"),
-            param("n", "1.0"), param("b", "yes")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "t", param("s", "x"), param("i", "1"), param("n", "1.0"), param("b", "yes")
+                    )
+                ),
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -342,52 +634,69 @@ class TestValueTypes(unittest.TestCase):
 
 
 class TestArrayParams(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "batch", "parameters": {"type": "object",
-            "properties": {
-                "ids": {"type": "array", "items": {"type": "integer"}},
-                "tags": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["ids"]}}]
+        self.tools = [
+            {
+                "name": "batch",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "ids": {"type": "array", "items": {"type": "integer"}},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["ids"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_integer_array(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call(invoke("batch", param("ids", "[1, 2, 3]")))))
+        self.assertTrue(
+            accepts(self.grammar, tool_call(invoke("batch", param("ids", "[1, 2, 3]"))))
+        )
 
-        self.assertFalse(accepts(self.grammar,
-            tool_call(invoke("batch", param("ids", "[1, 2, 3.0]")))))
+        self.assertFalse(
+            accepts(self.grammar, tool_call(invoke("batch", param("ids", "[1, 2, 3.0]"))))
+        )
 
-        self.assertFalse(accepts(self.grammar,
-            tool_call(invoke("batch", param("ids", "[\"1\", \"2\", \"3\"]")))))
+        self.assertFalse(
+            accepts(self.grammar, tool_call(invoke("batch", param("ids", '["1", "2", "3"]'))))
+        )
 
     def test_empty_array(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call(invoke("batch", param("ids", "[]")))))
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("batch", param("ids", "[]")))))
 
-        self.assertFalse(accepts(self.grammar,
-            tool_call(invoke("batch", param("ids", "")))))
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("batch", param("ids", "")))))
 
     def test_string_array_uses_json_string(self):
         """String items inside JSON arrays must be JSON-quoted."""
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("batch",
-            param("ids", "[1]"),
-            param("tags", '["foo", "bar"]')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(invoke("batch", param("ids", "[1]"), param("tags", '["foo", "bar"]'))),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("batch",
-            param("ids", "[1]"),
-            param("tags", "[foo, bar]")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(invoke("batch", param("ids", "[1]"), param("tags", "[foo, bar]"))),
+            )
+        )
 
     def test_rejects_unquoted_string_in_array(self):
         """Bare (unquoted) strings inside a JSON array should be rejected."""
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("batch",
-            param("ids", "[1]"),
-            param("tags", "[foo, bar]")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(invoke("batch", param("ids", "[1]"), param("tags", "[foo, bar]"))),
+            )
+        )
 
     def test_rejects_wrong_item_type(self):
-        self.assertFalse(accepts(self.grammar,
-            tool_call(invoke("batch", param("ids", '["not_int"]')))))
+        self.assertFalse(
+            accepts(self.grammar, tool_call(invoke("batch", param("ids", '["not_int"]'))))
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -396,43 +705,99 @@ class TestArrayParams(unittest.TestCase):
 
 
 class TestNestedObject(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "create_user", "parameters": {"type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "address": {"type": "object", "properties": {
-                    "street": {"type": "string"},
-                    "city": {"type": "string"},
-                    "zip": {"type": "string"},
-                }, "required": ["street", "city"]},
-            },
-            "required": ["name", "address"]}}]
+        self.tools = [
+            {
+                "name": "create_user",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "address": {
+                            "type": "object",
+                            "properties": {
+                                "street": {"type": "string"},
+                                "city": {"type": "string"},
+                                "zip": {"type": "string"},
+                            },
+                            "required": ["street", "city"],
+                        },
+                    },
+                    "required": ["name", "address"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_valid(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("create_user",
-            param("name", "Alice"),
-            param("address", '{"street": "123 Main", "city": "Springfield"}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "create_user",
+                        param("name", "Alice"),
+                        param("address", '{"street": "123 Main", "city": "Springfield"}'),
+                    )
+                ),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("create_user",
-            param("name", "Alice"),
-            param("address", '{"street": 123, "city": "Springfield"}')))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "create_user",
+                        param("name", "Alice"),
+                        param("address", '{"street": 123, "city": "Springfield"}'),
+                    )
+                ),
+            )
+        )
 
     def test_with_optional_field(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("create_user",
-            param("name", "Bob"),
-            param("address",
-                  '{"street": "456 Oak", "city": "Portland", "zip": "97201"}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "create_user",
+                        param("name", "Bob"),
+                        param(
+                            "address", '{"street": "456 Oak", "city": "Portland", "zip": "97201"}'
+                        ),
+                    )
+                ),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("create_user",
-            param("name", "Bob"),
-            param("address", '{"street": "456 Oak", "city": 97201, "zip": "97201"}')))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "create_user",
+                        param("name", "Bob"),
+                        param("address", '{"street": "456 Oak", "city": 97201, "zip": "97201"}'),
+                    )
+                ),
+            )
+        )
 
     def test_rejects_missing_required_nested(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("create_user",
-            param("name", "Eve"),
-            param("address", '{"street": "789 Pine"}')))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "create_user",
+                        param("name", "Eve"),
+                        param("address", '{"street": "789 Pine"}'),
+                    )
+                ),
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -441,55 +806,90 @@ class TestNestedObject(unittest.TestCase):
 
 
 class TestAnyOf(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"value": {"anyOf": [
-                {"type": "string"}, {"type": "integer"}, {"type": "null"},
-            ]}},
-            "required": ["value"]}}]
+        self.tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "value": {
+                            "anyOf": [
+                                {"type": "string"},
+                                {"type": "integer"},
+                                {"type": "null"},
+                            ]
+                        }
+                    },
+                    "required": ["value"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_string(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call(invoke("f", param("value", "hello")))))
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("f", param("value", "hello")))))
 
     def test_integer(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call(invoke("f", param("value", "42")))))
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("f", param("value", "42")))))
 
     def test_null(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call(invoke("f", param("value", "null")))))
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("f", param("value", "null")))))
 
 
 class TestConstValue(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "action": {"const": "execute"},
-                "target": {"type": "string"},
-            },
-            "required": ["action", "target"]}}]
+        self.tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"const": "execute"},
+                        "target": {"type": "string"},
+                    },
+                    "required": ["action", "target"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_correct(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
-            param("action", "execute"), param("target", "srv1")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(invoke("f", param("action", "execute"), param("target", "srv1"))),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
-            param("action", "run"), param("target", "srv1")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(invoke("f", param("action", "run"), param("target", "srv1"))),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
-            param("action", "exec"), param("target", "srv1")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(invoke("f", param("action", "exec"), param("target", "srv1"))),
+            )
+        )
 
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
-            param("action", "executes"), param("target", "srv1")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(invoke("f", param("action", "executes"), param("target", "srv1"))),
+            )
+        )
 
     def test_rejects_wrong(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
-            param("action", "delete"), param("target", "srv1")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(invoke("f", param("action", "delete"), param("target", "srv1"))),
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -501,68 +901,128 @@ class TestRefDefs(unittest.TestCase):
     """Non-recursive $ref to $defs entries."""
 
     def setUp(self):
-        self.tools = [{"name": "order", "parameters": {
-            "type": "object",
-            "properties": {
-                "status": {"$ref": "#/$defs/status_enum"},
-                "item": {"$ref": "#/$defs/item_obj"},
-            },
-            "$defs": {
-                "status_enum": {"type": "string", "enum": ["pending", "shipped", "delivered"]},
-                "item_obj": {"type": "object", "properties": {
-                    "name": {"type": "string"},
-                    "quantity": {"type": "integer"},
-                }, "required": ["name", "quantity"]},
-            },
-            "required": ["status", "item"],
-        }}]
+        self.tools = [
+            {
+                "name": "order",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "status": {"$ref": "#/$defs/status_enum"},
+                        "item": {"$ref": "#/$defs/item_obj"},
+                    },
+                    "$defs": {
+                        "status_enum": {
+                            "type": "string",
+                            "enum": ["pending", "shipped", "delivered"],
+                        },
+                        "item_obj": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "quantity": {"type": "integer"},
+                            },
+                            "required": ["name", "quantity"],
+                        },
+                    },
+                    "required": ["status", "item"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_valid(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("order",
-            param("status", "shipped"),
-            param("item", '{"name": "Widget", "quantity": 5}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "order",
+                        param("status", "shipped"),
+                        param("item", '{"name": "Widget", "quantity": 5}'),
+                    )
+                ),
+            )
+        )
 
     def test_rejects_invalid_enum_from_def(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("order",
-            param("status", "cancelled"),
-            param("item", '{"name": "Widget", "quantity": 5}')))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "order",
+                        param("status", "cancelled"),
+                        param("item", '{"name": "Widget", "quantity": 5}'),
+                    )
+                ),
+            )
+        )
 
     def test_rejects_missing_required_in_def_obj(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("order",
-            param("status", "pending"),
-            param("item", '{"name": "Widget"}')))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("order", param("status", "pending"), param("item", '{"name": "Widget"}'))
+                ),
+            )
+        )
 
 
 class TestCrossRefDefs(unittest.TestCase):
     """$defs entries that reference other $defs entries."""
 
     def setUp(self):
-        self.tools = [{"name": "f", "parameters": {
-            "type": "object",
-            "properties": {
-                "data": {"$ref": "#/$defs/wrapper"},
-            },
-            "$defs": {
-                "inner": {"type": "object", "properties": {
-                    "value": {"type": "integer"},
-                }, "required": ["value"]},
-                "wrapper": {"type": "object", "properties": {
-                    "payload": {"$ref": "#/$defs/inner"},
-                    "label": {"type": "string"},
-                }, "required": ["payload", "label"]},
-            },
-            "required": ["data"],
-        }}]
+        self.tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {"$ref": "#/$defs/wrapper"},
+                    },
+                    "$defs": {
+                        "inner": {
+                            "type": "object",
+                            "properties": {
+                                "value": {"type": "integer"},
+                            },
+                            "required": ["value"],
+                        },
+                        "wrapper": {
+                            "type": "object",
+                            "properties": {
+                                "payload": {"$ref": "#/$defs/inner"},
+                                "label": {"type": "string"},
+                            },
+                            "required": ["payload", "label"],
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_valid(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
-            param("data", '{"payload": {"value": 42}, "label": "test"}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("f", param("data", '{"payload": {"value": 42}, "label": "test"}'))
+                ),
+            )
+        )
 
     def test_rejects_wrong_inner_type(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
-            param("data", '{"payload": {"value": "not_int"}, "label": "test"}')))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("f", param("data", '{"payload": {"value": "not_int"}, "label": "test"}'))
+                ),
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -574,42 +1034,236 @@ class TestRecursiveRef(unittest.TestCase):
     """Recursive schemas via $defs (tree structures)."""
 
     def setUp(self):
-        self.tools = [{"name": "process", "parameters": {
-            "type": "object",
-            "properties": {
-                "tree": {"$ref": "#/$defs/node"},
-            },
-            "$defs": {
-                "node": {"type": "object", "properties": {
-                    "value": {"type": "string"},
-                    "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
-                }, "required": ["value"]},
-            },
-            "required": ["tree"],
-        }}]
+        self.tools = [
+            {
+                "name": "process",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tree": {"$ref": "#/$defs/node"},
+                    },
+                    "$defs": {
+                        "node": {
+                            "type": "object",
+                            "properties": {
+                                "value": {"type": "string"},
+                                "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+                            },
+                            "required": ["value"],
+                        },
+                    },
+                    "required": ["tree"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
-    def test_leaf_node(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("process",
-            param("tree", '{"value": "leaf"}')))))
-
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("process",
-            param("tree", "{}")))))
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("process",
-            param("tree", '{"value": 42}')))))
+    def test_single_node(self):
+        self.assertTrue(
+            accepts(self.grammar, tool_call(invoke("process", param("tree", '{"value": "leaf"}'))))
+        )
 
     def test_one_level(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("process",
-            param("tree",
-                '{"value": "root", "children": [{"value": "child"}]}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "process",
+                        param("tree", '{"value": "root", "children": [{"value": "child"}]}'),
+                    )
+                ),
+            )
+        )
 
     def test_two_levels(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("process",
-            param("tree",
-                '{"value": "root", "children": ['
-                '{"value": "a", "children": [{"value": "a1"}]}, '
-                '{"value": "b"}'
-                ']}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "process",
+                        param(
+                            "tree",
+                            '{"value": "root", "children": ['
+                            '{"value": "a", "children": [{"value": "a1"}]}, '
+                            '{"value": "b"}'
+                            "]}",
+                        ),
+                    )
+                ),
+            )
+        )
+
+
+class TestRecursiveUnionDefs(unittest.TestCase):
+    """Recursive schema using oneOf/anyOf across multiple $defs."""
+
+    def setUp(self):
+        self.tools = [
+            {
+                "name": "analyze_graph",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "root": {"$ref": "#/$defs/node"},
+                    },
+                    "$defs": {
+                        "node": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "meta": {"$ref": "#/$defs/meta"},
+                                "next": {
+                                    "oneOf": [
+                                        {"$ref": "#/$defs/edge"},
+                                        {"type": "null"},
+                                    ]
+                                },
+                            },
+                            "required": ["id", "next"],
+                        },
+                        "edge": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "targets": {
+                                    "type": "array",
+                                    "items": {
+                                        "anyOf": [
+                                            {"$ref": "#/$defs/node"},
+                                            {"type": "integer"},
+                                        ]
+                                    },
+                                },
+                            },
+                            "required": ["label", "targets"],
+                        },
+                        "meta": {
+                            "type": "object",
+                            "properties": {
+                                "tags": {"type": "array", "items": {"type": "string"}},
+                                "score": {"type": "number"},
+                            },
+                            "required": ["tags"],
+                        },
+                    },
+                    "required": ["root"],
+                },
+            }
+        ]
+        self.grammar = generate_minimax_tool_grammar(self.tools)
+
+    def test_recursive_defs_with_oneof_and_anyof(self):
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "analyze_graph",
+                        param(
+                            "root",
+                            '{"id":"n0","meta":{"tags":["entry"],"score":1.5},'
+                            '"next":{"label":"fanout","targets":['
+                            '{"id":"n1","next":null},'
+                            "7,"
+                            '{"id":"n2","next":{"label":"tail","targets":[11]}}'
+                            "]}}",
+                        ),
+                    )
+                ),
+            )
+        )
+
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "analyze_graph",
+                        param("root", '{"id":"bad","next":{"label":"oops","targets":[true]}}'),
+                    )
+                ),
+            )
+        )
+
+
+class TestRecursiveUnionDefsEnumRegression(unittest.TestCase):
+    """Recursive oneOf/anyOf with enum strings nested in JSON object context."""
+
+    def setUp(self):
+        self.tools = [
+            {
+                "name": "analyze_graph",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "root": {"$ref": "#/$defs/node"},
+                    },
+                    "$defs": {
+                        "node": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "next": {
+                                    "oneOf": [
+                                        {"$ref": "#/$defs/node"},
+                                        {"$ref": "#/$defs/branch"},
+                                        {"type": "null"},
+                                    ]
+                                },
+                            },
+                            "required": ["id", "next"],
+                        },
+                        "branch": {
+                            "type": "object",
+                            "properties": {
+                                "kind": {"type": "string", "enum": ["fork"]},
+                                "options": {
+                                    "type": "array",
+                                    "items": {
+                                        "anyOf": [
+                                            {"$ref": "#/$defs/node"},
+                                            {"$ref": "#/$defs/leaf"},
+                                        ]
+                                    },
+                                },
+                            },
+                            "required": ["kind", "options"],
+                        },
+                        "leaf": {
+                            "type": "object",
+                            "properties": {
+                                "value": {"type": "integer"},
+                            },
+                            "required": ["value"],
+                        },
+                    },
+                    "required": ["root"],
+                },
+            }
+        ]
+        self.grammar = generate_minimax_tool_grammar(self.tools)
+
+    def test_should_accept_enum_string_in_json_object_context(self):
+        # This payload is valid per the schema and should be accepted.
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "analyze_graph",
+                        param(
+                            "root",
+                            '{"id":"n0","next":{"kind":"fork","options":['
+                            '{"id":"n1","next":null},'
+                            '{"value":7}'
+                            "]}}",
+                        ),
+                    )
+                ),
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -621,30 +1275,48 @@ class TestRootRef(unittest.TestCase):
     """$ref "#" references the root parameters schema."""
 
     def setUp(self):
-        self.tools = [{"name": "walk", "parameters": {
-            "type": "object",
-            "properties": {
-                "value": {"type": "string"},
-                "next": {"$ref": "#"},
-            },
-            "required": ["value"],
-        }}]
+        self.tools = [
+            {
+                "name": "walk",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "string"},
+                        "next": {"$ref": "#"},
+                    },
+                    "required": ["value"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_no_recursion(self):
         """Just the base case, no 'next' field."""
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("walk",
-            param("value", "start")))))
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("walk", param("value", "start")))))
 
     def test_one_level(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("walk",
-            param("value", "start"),
-            param("next", '{"value": "end"}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("walk", param("value", "start"), param("next", '{"value": "end"}'))
+                ),
+            )
+        )
 
     def test_two_levels(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("walk",
-            param("value", "a"),
-            param("next", '{"value": "b", "next": {"value": "c"}}')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "walk",
+                        param("value", "a"),
+                        param("next", '{"value": "b", "next": {"value": "c"}}'),
+                    )
+                ),
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -656,43 +1328,67 @@ class TestJsonContext(unittest.TestCase):
     """Verify that string handling differs between top-level and JSON contexts."""
 
     def setUp(self):
-        self.tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "bare": {"type": "string"},
-                "arr": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["bare", "arr"]}}]
+        self.tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "bare": {"type": "string"},
+                        "arr": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["bare", "arr"],
+                },
+            }
+        ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_bare_string_unquoted(self):
         """Top-level string params are bare (unquoted)."""
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
-            param("bare", "hello world"),
-            param("arr", "[]")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(invoke("f", param("bare", "hello world"), param("arr", "[]"))),
+            )
+        )
 
     def test_array_strings_quoted(self):
         """Strings inside JSON arrays must be quoted."""
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
-            param("bare", "hi"),
-            param("arr", '["a", "b"]')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(invoke("f", param("bare", "hi"), param("arr", '["a", "b"]'))),
+            )
+        )
 
     def test_empty_string(self):
         """Empty string is allowed."""
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
-            param("bare", ""),
-            param("arr", "[]")))))
+        self.assertTrue(
+            accepts(self.grammar, tool_call(invoke("f", param("bare", ""), param("arr", "[]"))))
+        )
 
     def test_array_strings_escaped(self):
         """Strings inside JSON arrays must be escaped."""
-        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
-            param("bare", "hello world"),
-            param("arr", '["Well this is \\"fun\\""]')))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "f",
+                        param("bare", "hello world"),
+                        param("arr", '["Well this is \\"fun\\""]'),
+                    )
+                ),
+            )
+        )
 
     def test_rejects_unquoted_in_array(self):
         """Unquoted strings inside a JSON array should fail."""
-        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
-            param("bare", "hi"),
-            param("arr", "[a, b]")))))
+        self.assertFalse(
+            accepts(
+                self.grammar, tool_call(invoke("f", param("bare", "hi"), param("arr", "[a, b]")))
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -704,18 +1400,28 @@ class TestStrictMode(unittest.TestCase):
     """strict=True disallows additional properties."""
 
     def setUp(self):
-        self.tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "name": {"type": "string"},
-                }, "required": ["name"]},
-            },
-            "required": ["data"]}}]
+        self.tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                            },
+                            "required": ["name"],
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
 
     def test_strict_rejects_extra_key(self):
         grammar = generate_minimax_tool_grammar(self.tools, strict=True)
-        s = tool_call(invoke("f",
-            param("data", '{"name": "Alice", "age": 30}')))
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30}')))
         self.assertFalse(accepts(grammar, s))
 
     def test_strict_accepts_declared_only(self):
@@ -724,16 +1430,27 @@ class TestStrictMode(unittest.TestCase):
         self.assertTrue(accepts(grammar, s))
 
     def test_strict_ignores_additional_properties_true(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "name": {"type": "string"},
-                }, "required": ["name"], "additionalProperties": True},
-            },
-            "required": ["data"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                            },
+                            "required": ["name"],
+                            "additionalProperties": True,
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
         grammar = generate_minimax_tool_grammar(tools, strict=True)
-        s = tool_call(invoke("f",
-            param("data", '{"name": "Alice", "age": 30}')))
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30}')))
         self.assertFalse(accepts(grammar, s))
 
 
@@ -741,27 +1458,49 @@ class TestAdditionalProperties(unittest.TestCase):
     """strict=False respects additionalProperties from schema."""
 
     def setUp(self):
-        self.tools_allow = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "name": {"type": "string"},
-                }, "required": ["name"],
-                "additionalProperties": True},
-            },
-            "required": ["data"]}}]
-        self.tools_deny = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "name": {"type": "string"},
-                }, "required": ["name"],
-                "additionalProperties": False},
-            },
-            "required": ["data"]}}]
+        self.tools_allow = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "shoe_size": {"type": "integer"},
+                            },
+                            "required": ["name"],
+                            "additionalProperties": True,
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
+        self.tools_deny = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                            },
+                            "required": ["name"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
 
     def test_allows_extra_when_permitted(self):
         grammar = generate_minimax_tool_grammar(self.tools_allow, strict=False)
-        s = tool_call(invoke("f",
-            param("data", '{"name": "Alice", "age": 30}')))
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30}')))
         self.assertTrue(accepts(grammar, s))
 
     def test_allows_no_extra(self):
@@ -769,70 +1508,127 @@ class TestAdditionalProperties(unittest.TestCase):
         s = tool_call(invoke("f", param("data", '{"name": "Alice"}')))
         self.assertTrue(accepts(grammar, s))
 
+    def test_denies_additional_property_with_invalid_syntax(self):
+        grammar = generate_minimax_tool_grammar(self.tools_allow, strict=False)
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30, extra: val}')))
+        self.assertFalse(accepts(grammar, s))
+
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30, "extra"}')))
+        self.assertFalse(accepts(grammar, s))
+
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30, "extra":}')))
+        self.assertFalse(accepts(grammar, s))
+
     def test_denies_extra_when_schema_says_false(self):
         grammar = generate_minimax_tool_grammar(self.tools_deny, strict=False)
-        s = tool_call(invoke("f",
-            param("data", '{"name": "Alice", "age": 30}')))
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30}')))
         self.assertFalse(accepts(grammar, s))
 
     def test_default_allows_extra(self):
         """When additionalProperties is absent, default is to allow (non-strict)."""
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "name": {"type": "string"},
-                }, "required": ["name"]},
-            },
-            "required": ["data"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                            },
+                            "required": ["name"],
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
         grammar = generate_minimax_tool_grammar(tools, strict=False)
-        s = tool_call(invoke("f",
-            param("data", '{"name": "Alice", "extra": "val"}')))
+        s = tool_call(invoke("f", param("data", '{"name": "Alice", "extra": "val"}')))
         self.assertTrue(accepts(grammar, s))
 
     def test_additional_properties_schema_is_enforced(self):
         """When additionalProperties is a schema, extras should match it."""
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "name": {"type": "string"},
-                }, "required": ["name"],
-                "additionalProperties": {"type": "integer"}},
-            },
-            "required": ["data"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                            },
+                            "required": ["name"],
+                            "additionalProperties": {"type": "integer"},
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
         grammar = generate_minimax_tool_grammar(tools, strict=False)
 
-        self.assertTrue(accepts(grammar, tool_call(invoke("f",
-            param("data", '{"name": "Alice", "age": 30}')))))
-        self.assertFalse(accepts(grammar, tool_call(invoke("f",
-            param("data", '{"name": "Alice", "age": "30"}')))))
+        self.assertTrue(
+            accepts(grammar, tool_call(invoke("f", param("data", '{"name": "Alice", "age": 30}'))))
+        )
+        self.assertFalse(
+            accepts(
+                grammar, tool_call(invoke("f", param("data", '{"name": "Alice", "age": "30"}')))
+            )
+        )
 
     def test_all_optional_props_can_be_skipped_with_additional(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "opt_a": {"type": "string"},
-                    "opt_b": {"type": "string"},
-                }},  # no required, additionalProperties defaults True
-            },
-            "required": ["data"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "opt_a": {"type": "string"},
+                                "opt_b": {"type": "string"},
+                            },
+                        },  # no required, additionalProperties defaults True
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
         grammar = generate_minimax_tool_grammar(tools, strict=False)
         s = tool_call(invoke("f", param("data", '{"extra": "val"}')))
         self.assertTrue(accepts(grammar, s))
 
     def test_skip_optional_then_required_then_additional(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "opt_a": {"type": "string"},
-                    "req_b": {"type": "integer"},
-                }, "required": ["req_b"]},
-            },
-            "required": ["data"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "opt_a": {"type": "string"},
+                                "req_b": {"type": "integer"},
+                            },
+                            "required": ["req_b"],
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
         grammar = generate_minimax_tool_grammar(tools, strict=False)
 
         # opt_a omitted, required req_b present, then additional key.
-        self.assertTrue(accepts(grammar, tool_call(invoke("f",
-            param("data", '{"req_b": 7, "extra": "ok"}')))))
+        self.assertTrue(
+            accepts(grammar, tool_call(invoke("f", param("data", '{"req_b": 7, "extra": "ok"}'))))
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -841,20 +1637,25 @@ class TestAdditionalProperties(unittest.TestCase):
 
 
 class TestPreamble(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"x": {"type": "string"}}, "required": ["x"]}}]
+        self.tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"type": "string"}},
+                    "required": ["x"],
+                },
+            }
+        ]
 
     def test_no_preamble_rejects_leading_text(self):
         g = generate_minimax_tool_grammar(self.tools, allow_preamble=False)
-        self.assertFalse(accepts(g,
-            "Sure!\n" + tool_call(invoke("f", param("x", "hi")))))
+        self.assertFalse(accepts(g, "Sure!\n" + tool_call(invoke("f", param("x", "hi")))))
 
     def test_preamble_accepts_leading_text(self):
         g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
-        self.assertTrue(accepts(g,
-            "Sure!" + tool_call(invoke("f", param("x", "hi")))))
+        self.assertTrue(accepts(g, "Sure!" + tool_call(invoke("f", param("x", "hi")))))
 
     def test_preamble_accepts_empty(self):
         g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
@@ -867,18 +1668,14 @@ class TestPreamble(unittest.TestCase):
 
 
 class TestNoParams(unittest.TestCase):
-
     def setUp(self):
-        self.tools = [{"name": "ping", "parameters": {
-            "type": "object", "properties": {}}}]
+        self.tools = [{"name": "ping", "parameters": {"type": "object", "properties": {}}}]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_accepts(self):
-        self.assertTrue(accepts(self.grammar,
-            tool_call('<invoke name="ping">\n</invoke>')))
+        self.assertTrue(accepts(self.grammar, tool_call('<invoke name="ping">\n</invoke>')))
 
-        self.assertFalse(accepts(self.grammar,
-            tool_call(invoke("ping", param("x", "y")))))
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("ping", param("x", "y")))))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -887,63 +1684,121 @@ class TestNoParams(unittest.TestCase):
 
 
 class TestComplexRealWorld(unittest.TestCase):
-
     def setUp(self):
         self.tools = [
-            {"type": "function", "function": {
-                "name": "create_github_issue",
-                "parameters": {"type": "object", "properties": {
-                    "title": {"type": "string"},
-                    "body": {"type": "string"},
-                    "labels": {"type": "array", "items": {"type": "string"}},
-                    "priority": {"type": "string",
-                        "enum": ["low", "medium", "high", "critical"]},
-                }, "required": ["title", "body"]}}},
-            {"type": "function", "function": {
-                "name": "search_issues",
-                "parameters": {"type": "object", "properties": {
-                    "query": {"type": "string"},
-                    "state": {"type": "string", "enum": ["open", "closed", "all"]},
-                    "per_page": {"type": "integer"},
-                }, "required": ["query"]}}},
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_github_issue",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "body": {"type": "string"},
+                            "labels": {"type": "array", "items": {"type": "string"}},
+                            "priority": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high", "critical"],
+                            },
+                        },
+                        "required": ["title", "body"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_issues",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string"},
+                            "state": {"type": "string", "enum": ["open", "closed", "all"]},
+                            "per_page": {"type": "integer"},
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
         ]
         self.grammar = generate_minimax_tool_grammar(self.tools)
 
     def test_create_minimal(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke(
-            "create_github_issue",
-            param("title", "Bug"), param("body", "Details")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("create_github_issue", param("title", "Bug"), param("body", "Details"))
+                ),
+            )
+        )
 
     def test_create_with_optionals(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke(
-            "create_github_issue",
-            param("title", "Feature"),
-            param("body", "Add XML grammar support"),
-            param("labels", '["enhancement"]'),
-            param("priority", "high")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "create_github_issue",
+                        param("title", "Feature"),
+                        param("body", "Add XML grammar support"),
+                        param("labels", '["enhancement"]'),
+                        param("priority", "high"),
+                    )
+                ),
+            )
+        )
 
     def test_search(self):
-        self.assertTrue(accepts(self.grammar, tool_call(invoke(
-            "search_issues",
-            param("query", "minimax"), param("state", "open"),
-            param("per_page", "20")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "search_issues",
+                        param("query", "minimax"),
+                        param("state", "open"),
+                        param("per_page", "20"),
+                    )
+                ),
+            )
+        )
 
     def test_parallel(self):
-        self.assertTrue(accepts(self.grammar, tool_call(
-            invoke("create_github_issue",
-                param("title", "Bug"), param("body", "Details")),
-            invoke("search_issues", param("query", "related")))))
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("create_github_issue", param("title", "Bug"), param("body", "Details")),
+                    invoke("search_issues", param("query", "related")),
+                ),
+            )
+        )
 
     def test_rejects_invalid_priority(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke(
-            "create_github_issue",
-            param("title", "Bug"), param("body", "Details"),
-            param("priority", "urgent")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "create_github_issue",
+                        param("title", "Bug"),
+                        param("body", "Details"),
+                        param("priority", "urgent"),
+                    )
+                ),
+            )
+        )
 
     def test_rejects_invalid_state(self):
-        self.assertFalse(accepts(self.grammar, tool_call(invoke(
-            "search_issues",
-            param("query", "test"), param("state", "pending")))))
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("search_issues", param("query", "test"), param("state", "pending"))
+                ),
+            )
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -952,28 +1807,48 @@ class TestComplexRealWorld(unittest.TestCase):
 
 
 class TestUnsupportedRef(unittest.TestCase):
-
     def test_external_uri_raises(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"x": {"$ref": "https://example.com/schema.json"}},
-            "required": ["x"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"$ref": "https://example.com/schema.json"}},
+                    "required": ["x"],
+                },
+            }
+        ]
         with self.assertRaises(ValueError) as cm:
             generate_minimax_tool_grammar(tools)
         self.assertIn("Unsupported $ref", str(cm.exception))
 
     def test_relative_path_raises(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"x": {"$ref": "#/properties/y"}},
-            "required": ["x"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"$ref": "#/properties/y"}},
+                    "required": ["x"],
+                },
+            }
+        ]
         with self.assertRaises(ValueError) as cm:
             generate_minimax_tool_grammar(tools)
         self.assertIn("Unsupported $ref", str(cm.exception))
 
     def test_undefined_def_raises(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"x": {"$ref": "#/$defs/nonexistent"}},
-            "$defs": {},
-            "required": ["x"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"$ref": "#/$defs/nonexistent"}},
+                    "$defs": {},
+                    "required": ["x"],
+                },
+            }
+        ]
         with self.assertRaises(ValueError) as cm:
             generate_minimax_tool_grammar(tools)
         self.assertIn("undefined", str(cm.exception))
@@ -985,20 +1860,34 @@ class TestUnsupportedRef(unittest.TestCase):
 
 
 class TestKnownLimitations(unittest.TestCase):
-
     @unittest.expectedFailure
     def test_allof_not_supported(self):
         """allOf is not handled — falls through to bare-string fallback."""
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"allOf": [
-                    {"type": "object", "properties": {"a": {"type": "string"}},
-                     "required": ["a"]},
-                    {"type": "object", "properties": {"b": {"type": "integer"}},
-                     "required": ["b"]},
-                ]},
-            },
-            "required": ["data"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "allOf": [
+                                {
+                                    "type": "object",
+                                    "properties": {"a": {"type": "string"}},
+                                    "required": ["a"],
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {"b": {"type": "integer"}},
+                                    "required": ["b"],
+                                },
+                            ]
+                        },
+                    },
+                    "required": ["data"],
+                },
+            }
+        ]
         grammar = generate_minimax_tool_grammar(tools)
         # allOf should produce {"a": "x", "b": 1} but grammar won't enforce
         # object structure — it falls back to bare-string, so this JSON obj
@@ -1011,17 +1900,24 @@ class TestKnownLimitations(unittest.TestCase):
         s = tool_call(invoke("f", param("data", "{}")))
         self.assertFalse(accepts(grammar, s))
 
+
 # ═══════════════════════════════════════════════════════════════════════
 # Determinism
 # ═══════════════════════════════════════════════════════════════════════
 
 
 class TestDeterminism(unittest.TestCase):
-
     def test_same_output(self):
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {"a": {"type": "string"}, "b": {"type": "integer"}},
-            "required": ["a"]}}]
+        tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"a": {"type": "string"}, "b": {"type": "integer"}},
+                    "required": ["a"],
+                },
+            }
+        ]
         g1 = generate_minimax_tool_grammar(tools)
         g2 = generate_minimax_tool_grammar(tools)
         self.assertEqual(g1, g2)

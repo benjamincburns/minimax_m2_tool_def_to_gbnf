@@ -26,14 +26,14 @@ Known limitations:
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ── Shared sub-grammars for JSON value types ────────────────────────────
 
-_JSON_PRIMITIVES = r'''
+_JSON_PRIMITIVES = r"""
 json-string ::= "\"" json-string-inner "\""
 json-string-inner ::= "" | json-string-char json-string-inner
 json-string-char ::= [^"\\\x00-\x1f] | "\\" json-escape
@@ -54,19 +54,28 @@ json-object-body ::= "" | json-object-kv (ws "," ws json-object-kv)*
 json-object-kv ::= json-string ws ":" ws json-value
 
 ws ::= [ \t\n]*
-'''.strip()
+""".strip()
 
-_RULE_NAME_RE = re.compile(r'[^a-zA-Z0-9_-]')
+_RULE_NAME_RE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
 def _safe_rule_name(name: str) -> str:
     """Sanitize a string for use as a GBNF rule name."""
-    return _RULE_NAME_RE.sub('-', name)
+    return _RULE_NAME_RE.sub("-", name)
 
 
 def _escape_gbnf_string(s: str) -> str:
     """Escape a string for use inside GBNF double-quoted literals."""
-    return s.replace('\\', '\\\\').replace('"', '\\"')
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _schema_literal(value: Any, *, json_context: bool) -> str:
+    """Serialize schema literals for enum/const in the target context."""
+    if isinstance(value, str):
+        # Top-level XML string params are bare, JSON contexts are quoted.
+        return json.dumps(value) if json_context else value
+    # JSON spellings for null/bool/number/object/array.
+    return json.dumps(value, separators=(",", ":"))
 
 
 def _extract_tool_info(tool: dict) -> tuple[str, dict]:
@@ -79,22 +88,25 @@ def _extract_tool_info(tool: dict) -> tuple[str, dict]:
 
 # ── Grammar context ─────────────────────────────────────────────────────
 
+
 @dataclass
 class _GrammarContext:
     """Shared state threaded through grammar generation."""
+
     extra_rules: list[str] = field(default_factory=list)
     defs: dict[str, Any] = field(default_factory=dict)
     defs_prefix: str = ""
     root_schema: dict[str, Any] | None = None
     strict: bool = True
-    _processed_defs: set[str] = field(default_factory=set)
+    _processed_defs: set[tuple[str, bool]] = field(default_factory=set)
     _root_ref_rule: str = ""
     _root_ref_generated: bool = False
 
 
 # ── $ref resolution ─────────────────────────────────────────────────────
 
-def _resolve_ref(ref: str, ctx: _GrammarContext) -> str:
+
+def _resolve_ref(ref: str, ctx: _GrammarContext, *, json_context: bool) -> str:
     """Resolve a $ref string to a GBNF rule name.
 
     Supported formats:
@@ -109,47 +121,46 @@ def _resolve_ref(ref: str, ctx: _GrammarContext) -> str:
         if not ctx._root_ref_generated:
             ctx._root_ref_generated = True
             rule_name = ctx._root_ref_rule
-            val_ref = _value_rule_for_schema(
-                ctx.root_schema, rule_name, ctx, json_context=True
-            )
+            val_ref = _value_rule_for_schema(ctx.root_schema, rule_name, ctx, json_context=True)
             if val_ref != rule_name:
                 ctx.extra_rules.append(f"{rule_name} ::= {val_ref}")
         return ctx._root_ref_rule
 
     if ref.startswith("#/$defs/"):
-        def_name = ref[len("#/$defs/"):]
+        def_name = ref[len("#/$defs/") :]
         if def_name not in ctx.defs:
-            raise ValueError(
-                f"$ref '#/$defs/{def_name}' references undefined definition"
-            )
-        return _ensure_def_processed(def_name, ctx)
+            raise ValueError(f"$ref '#/$defs/{def_name}' references undefined definition")
+        return _ensure_def_processed(def_name, ctx, json_context=json_context)
 
-    raise ValueError(
-        f"Unsupported $ref: {ref!r}. "
-        "Only '#/$defs/<name>' and '#' are supported."
-    )
+    raise ValueError(f"Unsupported $ref: {ref!r}. Only '#/$defs/<name>' and '#' are supported.")
 
 
-def _ensure_def_processed(def_name: str, ctx: _GrammarContext) -> str:
+def _ensure_def_processed(
+    def_name: str,
+    ctx: _GrammarContext,
+    *,
+    json_context: bool,
+) -> str:
     """Ensure a $defs entry has a corresponding GBNF rule. Returns rule name.
 
     Uses lazy generation with cycle detection so that recursive $defs
     (A references B references A) produce valid recursive GBNF rules.
     """
-    rule_name = f"{ctx.defs_prefix}defs-{_safe_rule_name(def_name)}"
-    if def_name not in ctx._processed_defs:
+    mode = "json" if json_context else "bare"
+    rule_name = f"{ctx.defs_prefix}defs-{_safe_rule_name(def_name)}-{mode}"
+    key = (def_name, json_context)
+    if key not in ctx._processed_defs:
         # Mark BEFORE processing to break infinite recursion
-        ctx._processed_defs.add(def_name)
+        ctx._processed_defs.add(key)
         schema = ctx.defs[def_name]
-        val_ref = _value_rule_for_schema(
-            schema, rule_name, ctx, json_context=True
-        )
+        val_ref = _value_rule_for_schema(schema, rule_name, ctx, json_context=json_context)
         if val_ref != rule_name:
             ctx.extra_rules.append(f"{rule_name} ::= {val_ref}")
     return rule_name
 
 
 # ── Value type grammar generation ───────────────────────────────────────
+
 
 def _value_rule_for_schema(
     schema: dict[str, Any],
@@ -169,12 +180,13 @@ def _value_rule_for_schema(
     """
     # $ref resolution
     if "$ref" in schema:
-        return _resolve_ref(schema["$ref"], ctx)
+        return _resolve_ref(schema["$ref"], ctx, json_context=json_context)
 
     # Enum constraint
     if "enum" in schema:
         alts = " | ".join(
-            f'"{_escape_gbnf_string(str(v))}"' for v in schema["enum"]
+            f'"{_escape_gbnf_string(_schema_literal(v, json_context=json_context))}"'
+            for v in schema["enum"]
         )
         rule_name = f"{prefix}-enum"
         ctx.extra_rules.append(f"{rule_name} ::= {alts}")
@@ -183,9 +195,8 @@ def _value_rule_for_schema(
     # Const constraint
     if "const" in schema:
         rule_name = f"{prefix}-const"
-        ctx.extra_rules.append(
-            f'{rule_name} ::= "{_escape_gbnf_string(str(schema["const"]))}"'
-        )
+        lit = _schema_literal(schema["const"], json_context=json_context)
+        ctx.extra_rules.append(f'{rule_name} ::= "{_escape_gbnf_string(lit)}"')
         return rule_name
 
     typ = schema.get("type")
@@ -195,9 +206,7 @@ def _value_rule_for_schema(
         variants = schema.get("anyOf") or schema.get("oneOf", [])
         alt_refs = []
         for i, variant in enumerate(variants):
-            ref = _value_rule_for_schema(
-                variant, f"{prefix}-v{i}", ctx, json_context=json_context
-            )
+            ref = _value_rule_for_schema(variant, f"{prefix}-v{i}", ctx, json_context=json_context)
             alt_refs.append(ref)
         rule_name = f"{prefix}-union"
         ctx.extra_rules.append(f"{rule_name} ::= " + " | ".join(alt_refs))
@@ -241,9 +250,7 @@ def _value_rule_for_schema(
             arr_rule = f"{prefix}-array"
             body_rule = f"{arr_rule}-body"
             ctx.extra_rules.append(f'{arr_rule} ::= "[" ws {body_rule} ws "]"')
-            ctx.extra_rules.append(
-                f'{body_rule} ::= "" | {item_ref} (ws "," ws {item_ref})*'
-            )
+            ctx.extra_rules.append(f'{body_rule} ::= "" | {item_ref} (ws "," ws {item_ref})*')
             return arr_rule
         return "json-array"
 
@@ -251,9 +258,7 @@ def _value_rule_for_schema(
     if typ == "object":
         properties = schema.get("properties")
         if properties:
-            return _object_rule_for_schema(
-                schema, prefix, ctx, json_context=json_context
-            )
+            return _object_rule_for_schema(schema, prefix, ctx, json_context=json_context)
         return "json-object"
 
     # Fallback
@@ -289,9 +294,7 @@ def _object_rule_for_schema(
     kv_parts: list[tuple[str, bool]] = []
     for pname, pschema in properties.items():
         safe = _safe_rule_name(pname)
-        val_ref = _value_rule_for_schema(
-            pschema, f"{prefix}-{safe}", ctx, json_context=True
-        )
+        val_ref = _value_rule_for_schema(pschema, f"{prefix}-{safe}", ctx, json_context=True)
         kv_rule = f"{prefix}-kv-{safe}"
         ctx.extra_rules.append(
             f'{kv_rule} ::= "\\"{_escape_gbnf_string(pname)}\\"" ws ":" ws {val_ref}'
@@ -304,15 +307,12 @@ def _object_rule_for_schema(
     count = len(kv_parts)
     for i in range(count, -1, -1):
         for has_prev in (False, True):
-            state = f'{body_prefix}-{i}-{"p" if has_prev else "n"}'
+            state = f"{body_prefix}-{i}-{'p' if has_prev else 'n'}"
             if i == count:
                 if not allow_additional:
                     expr = '""'
                 elif has_prev:
-                    expr = (
-                        f'"" | ws "," ws {additional_kv_rule} '
-                        f'(ws "," ws {additional_kv_rule})*'
-                    )
+                    expr = f'"" | ws "," ws {additional_kv_rule} (ws "," ws {additional_kv_rule})*'
                 else:
                     expr = f'"" | {additional_kv_rule} (ws "," ws {additional_kv_rule})*'
             else:
@@ -322,7 +322,7 @@ def _object_rule_for_schema(
                 if is_required:
                     expr = take
                 else:
-                    skip_state = f'{body_prefix}-{i + 1}-{"p" if has_prev else "n"}'
+                    skip_state = f"{body_prefix}-{i + 1}-{'p' if has_prev else 'n'}"
                     expr = f"{skip_state} | {take}"
             ctx.extra_rules.append(f"{state} ::= {expr}")
 
@@ -331,6 +331,7 @@ def _object_rule_for_schema(
 
 
 # ── Top-level grammar generation ────────────────────────────────────────
+
 
 def generate_minimax_tool_grammar(
     tools: list[dict],
@@ -361,14 +362,12 @@ def generate_minimax_tool_grammar(
     # Root rule
     if allow_preamble:
         rules.append(
-            'root ::= preamble "<minimax:tool_call>" "\\n" invocations '
-            '"</minimax:tool_call>" "\\n"'
+            'root ::= preamble "<minimax:tool_call>" "\\n" invocations "</minimax:tool_call>" "\\n"'
         )
-        rules.append('preamble ::= [^<]*')
+        rules.append("preamble ::= [^<]*")
     else:
         rules.append(
-            'root ::= "<minimax:tool_call>" "\\n" invocations '
-            '"</minimax:tool_call>" "\\n"'
+            'root ::= "<minimax:tool_call>" "\\n" invocations "</minimax:tool_call>" "\\n"'
         )
 
     rules.append('invocations ::= invocation ("\\n" invocation)*')
@@ -415,7 +414,8 @@ def generate_minimax_tool_grammar(
 
             rules.append(
                 f'{param_rule} ::= "<parameter name=\\"{_escape_gbnf_string(pname)}\\">"'
-                f" {val_ref} " f'"</parameter>"'
+                f" {val_ref} "
+                f'"</parameter>"'
             )
             param_rules.append((param_rule, pname in required))
 
@@ -439,7 +439,7 @@ def generate_minimax_tool_grammar(
     rules.append("invocation ::= " + " | ".join(invocation_alts))
 
     # Bare string for top-level string parameter values
-    rules.append('bare-string ::= [^<]*')
+    rules.append("bare-string ::= [^<]*")
 
     # Assemble
     all_rules = rules + all_extra_rules + [_JSON_PRIMITIVES]

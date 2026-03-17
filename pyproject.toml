@@ -7,3 +7,31 @@ requires-python = ">=3.13.9"
 dependencies = [
     "xgrammar>=0.1.32",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pyright>=1.1.400",
+    "ruff>=0.8.0",
+]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false
+venvPath = "."
+venv = ".venv"
+include = ["minimax_m2_grammar"]
+exclude = ["**/__pycache__", ".venv"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["minimax_m2_grammar"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = []
