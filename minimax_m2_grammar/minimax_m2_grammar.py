@@ -19,9 +19,6 @@ Known limitations:
 - allOf is not supported (falls through to bare-string/json-value fallback).
 - minimum/maximum, minLength/maxLength, pattern, minItems/maxItems are not
   enforced (consistent with OpenAI's own structured output engine).
-- When strict=False and additionalProperties is allowed on an object where
-  ALL declared properties are optional and none are emitted, additional
-  properties may produce a leading-comma JSON formatting issue.
 - $defs entries containing bare {"type": "string"} will produce json-string
   (quoted) rules even when referenced from a top-level XML parameter value.
   The MiniMax parser handles quoted strings correctly via json.loads fallback.
@@ -278,6 +275,15 @@ def _object_rule_for_schema(
     # Determine if additional properties are allowed
     additional = schema.get("additionalProperties", True)
     allow_additional = (not ctx.strict) and (additional is not False)
+    additional_kv_rule = "json-object-kv"
+    if allow_additional and isinstance(additional, dict):
+        additional_val_ref = _value_rule_for_schema(
+            additional, f"{prefix}-additional", ctx, json_context=True
+        )
+        additional_kv_rule = f"{prefix}-kv-additional"
+        ctx.extra_rules.append(
+            f'{additional_kv_rule} ::= json-string ws ":" ws {additional_val_ref}'
+        )
 
     # Generate per-property KV rules
     kv_parts: list[tuple[str, bool]] = []
@@ -292,37 +298,35 @@ def _object_rule_for_schema(
         )
         kv_parts.append((kv_rule, pname in required))
 
-    if not kv_parts and not allow_additional:
-        ctx.extra_rules.append(f'{rule_name} ::= "{{" ws "}}"')
-        return rule_name
-
-    if not kv_parts and allow_additional:
-        # No declared properties, just arbitrary KV pairs
-        ctx.extra_rules.append(
-            f'{rule_name} ::= "{{" ws json-object-body ws "}}"'
-        )
-        return rule_name
-
-    # Build body: required in order, optional with ?, additional at end
-    inner_parts: list[str] = []
-    for i, (kv_rule, is_required) in enumerate(kv_parts):
-        needs_leading_comma = i > 0
-        if is_required:
-            if needs_leading_comma:
-                inner_parts.append(f'ws "," ws {kv_rule}')
+    # Build object body with two states: whether a previous KV was emitted.
+    # This avoids leading-comma failures when initial optional fields are omitted.
+    body_prefix = f"{prefix}-obj-body"
+    count = len(kv_parts)
+    for i in range(count, -1, -1):
+        for has_prev in (False, True):
+            state = f'{body_prefix}-{i}-{"p" if has_prev else "n"}'
+            if i == count:
+                if not allow_additional:
+                    expr = '""'
+                elif has_prev:
+                    expr = (
+                        f'"" | ws "," ws {additional_kv_rule} '
+                        f'(ws "," ws {additional_kv_rule})*'
+                    )
+                else:
+                    expr = f'"" | {additional_kv_rule} (ws "," ws {additional_kv_rule})*'
             else:
-                inner_parts.append(kv_rule)
-        else:
-            if needs_leading_comma:
-                inner_parts.append(f'(ws "," ws {kv_rule})?')
-            else:
-                inner_parts.append(f'({kv_rule})?')
+                kv_rule, is_required = kv_parts[i]
+                take_sep = 'ws "," ws ' if has_prev else ""
+                take = f"{take_sep}{kv_rule} {body_prefix}-{i + 1}-p"
+                if is_required:
+                    expr = take
+                else:
+                    skip_state = f'{body_prefix}-{i + 1}-{"p" if has_prev else "n"}'
+                    expr = f"{skip_state} | {take}"
+            ctx.extra_rules.append(f"{state} ::= {expr}")
 
-    if allow_additional:
-        inner_parts.append('(ws "," ws json-object-kv)*')
-
-    body_expr = " ".join(inner_parts)
-    ctx.extra_rules.append(f'{rule_name} ::= "{{" ws {body_expr} ws "}}"')
+    ctx.extra_rules.append(f'{rule_name} ::= "{{" ws {body_prefix}-0-n ws "}}"')
     return rule_name
 
 

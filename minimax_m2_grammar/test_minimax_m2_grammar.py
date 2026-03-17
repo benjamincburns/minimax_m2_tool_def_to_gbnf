@@ -723,6 +723,19 @@ class TestStrictMode(unittest.TestCase):
         s = tool_call(invoke("f", param("data", '{"name": "Alice"}')))
         self.assertTrue(accepts(grammar, s))
 
+    def test_strict_ignores_additional_properties_true(self):
+        tools = [{"name": "f", "parameters": {"type": "object",
+            "properties": {
+                "data": {"type": "object", "properties": {
+                    "name": {"type": "string"},
+                }, "required": ["name"], "additionalProperties": True},
+            },
+            "required": ["data"]}}]
+        grammar = generate_minimax_tool_grammar(tools, strict=True)
+        s = tool_call(invoke("f",
+            param("data", '{"name": "Alice", "age": 30}')))
+        self.assertFalse(accepts(grammar, s))
+
 
 class TestAdditionalProperties(unittest.TestCase):
     """strict=False respects additionalProperties from schema."""
@@ -775,6 +788,51 @@ class TestAdditionalProperties(unittest.TestCase):
         s = tool_call(invoke("f",
             param("data", '{"name": "Alice", "extra": "val"}')))
         self.assertTrue(accepts(grammar, s))
+
+    def test_additional_properties_schema_is_enforced(self):
+        """When additionalProperties is a schema, extras should match it."""
+        tools = [{"name": "f", "parameters": {"type": "object",
+            "properties": {
+                "data": {"type": "object", "properties": {
+                    "name": {"type": "string"},
+                }, "required": ["name"],
+                "additionalProperties": {"type": "integer"}},
+            },
+            "required": ["data"]}}]
+        grammar = generate_minimax_tool_grammar(tools, strict=False)
+
+        self.assertTrue(accepts(grammar, tool_call(invoke("f",
+            param("data", '{"name": "Alice", "age": 30}')))))
+        self.assertFalse(accepts(grammar, tool_call(invoke("f",
+            param("data", '{"name": "Alice", "age": "30"}')))))
+
+    def test_all_optional_props_can_be_skipped_with_additional(self):
+        tools = [{"name": "f", "parameters": {"type": "object",
+            "properties": {
+                "data": {"type": "object", "properties": {
+                    "opt_a": {"type": "string"},
+                    "opt_b": {"type": "string"},
+                }},  # no required, additionalProperties defaults True
+            },
+            "required": ["data"]}}]
+        grammar = generate_minimax_tool_grammar(tools, strict=False)
+        s = tool_call(invoke("f", param("data", '{"extra": "val"}')))
+        self.assertTrue(accepts(grammar, s))
+
+    def test_skip_optional_then_required_then_additional(self):
+        tools = [{"name": "f", "parameters": {"type": "object",
+            "properties": {
+                "data": {"type": "object", "properties": {
+                    "opt_a": {"type": "string"},
+                    "req_b": {"type": "integer"},
+                }, "required": ["req_b"]},
+            },
+            "required": ["data"]}}]
+        grammar = generate_minimax_tool_grammar(tools, strict=False)
+
+        # opt_a omitted, required req_b present, then additional key.
+        self.assertTrue(accepts(grammar, tool_call(invoke("f",
+            param("data", '{"req_b": 7, "extra": "ok"}')))))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -952,25 +1010,6 @@ class TestKnownLimitations(unittest.TestCase):
         self.assertFalse(accepts(grammar, s))
         s = tool_call(invoke("f", param("data", "{}")))
         self.assertFalse(accepts(grammar, s))
-
-    @unittest.expectedFailure
-    def test_all_optional_object_props_with_additional_comma_issue(self):
-        """When ALL declared props are optional, first absent + additional
-        present produces a leading comma. This is a known grammar limitation."""
-        tools = [{"name": "f", "parameters": {"type": "object",
-            "properties": {
-                "data": {"type": "object", "properties": {
-                    "opt_a": {"type": "string"},
-                    "opt_b": {"type": "string"},
-                }},  # no required, additionalProperties defaults True
-            },
-            "required": ["data"]}}]
-        grammar = generate_minimax_tool_grammar(tools, strict=False)
-        # With all optional props absent, additional property would need
-        # no leading comma, but grammar always generates leading comma
-        s = tool_call(invoke("f", param("data", '{"extra": "val"}')))
-        self.assertTrue(accepts(grammar, s))
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Determinism
