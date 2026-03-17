@@ -264,6 +264,10 @@ class TestMultipleTools(unittest.TestCase):
             invoke("get_weather", param("location", "NYC")),
             invoke("search", param("query", "weather nyc")))))
 
+        self.assertFalse(accepts(self.grammar, tool_call(
+            invoke("get_weather", param("location", "NYC")),
+            invoke("delete", param("query", "x")))))
+
     def test_rejects_unknown(self):
         self.assertFalse(accepts(self.grammar,
             tool_call(invoke("delete", param("x", "y")))))
@@ -290,14 +294,35 @@ class TestValueTypes(unittest.TestCase):
             param("s", "hello"), param("i", "42"),
             param("n", "3.14"), param("b", "true")))))
 
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
+            param("s", "hello"), param("i", "42"),
+            param("n", "3.14"), param("b", "yes")))))
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
+            param("s", "hello"), param("i", "3.14"),
+            param("n", "3.14"), param("b", "true")))))
+
     def test_negative_int(self):
         self.assertTrue(accepts(self.grammar, tool_call(invoke("t",
             param("s", "x"), param("i", "-7"),
             param("n", "0"), param("b", "false")))))
 
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
+            param("s", "x"), param("i", "-7.0"),
+            param("n", "0"), param("b", "false")))))
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
+            param("s", "x"), param("i", "-7"),
+            param("n", "0"), param("b", "0")))))
+
     def test_scientific(self):
         self.assertTrue(accepts(self.grammar, tool_call(invoke("t",
             param("s", "x"), param("i", "1"),
+            param("n", "1.5e10"), param("b", "true")))))
+
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
+            param("s", "x"), param("i", "1"),
+            param("n", "not_a_number"), param("b", "true")))))
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("t",
+            param("s", "x"), param("i", "1e2"),
             param("n", "1.5e10"), param("b", "true")))))
 
     def test_rejects_string_for_int(self):
@@ -350,6 +375,10 @@ class TestArrayParams(unittest.TestCase):
             param("ids", "[1]"),
             param("tags", '["foo", "bar"]')))))
 
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("batch",
+            param("ids", "[1]"),
+            param("tags", "[foo, bar]")))))
+
     def test_rejects_unquoted_string_in_array(self):
         """Bare (unquoted) strings inside a JSON array should be rejected."""
         self.assertFalse(accepts(self.grammar, tool_call(invoke("batch",
@@ -386,11 +415,19 @@ class TestNestedObject(unittest.TestCase):
             param("name", "Alice"),
             param("address", '{"street": "123 Main", "city": "Springfield"}')))))
 
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("create_user",
+            param("name", "Alice"),
+            param("address", '{"street": 123, "city": "Springfield"}')))))
+
     def test_with_optional_field(self):
         self.assertTrue(accepts(self.grammar, tool_call(invoke("create_user",
             param("name", "Bob"),
             param("address",
                   '{"street": "456 Oak", "city": "Portland", "zip": "97201"}')))))
+
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("create_user",
+            param("name", "Bob"),
+            param("address", '{"street": "456 Oak", "city": 97201, "zip": "97201"}')))))
 
     def test_rejects_missing_required_nested(self):
         self.assertFalse(accepts(self.grammar, tool_call(invoke("create_user",
@@ -440,6 +477,15 @@ class TestConstValue(unittest.TestCase):
     def test_correct(self):
         self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
             param("action", "execute"), param("target", "srv1")))))
+
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
+            param("action", "run"), param("target", "srv1")))))
+
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
+            param("action", "exec"), param("target", "srv1")))))
+
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
+            param("action", "executes"), param("target", "srv1")))))
 
     def test_rejects_wrong(self):
         self.assertFalse(accepts(self.grammar, tool_call(invoke("f",
@@ -547,6 +593,11 @@ class TestRecursiveRef(unittest.TestCase):
         self.assertTrue(accepts(self.grammar, tool_call(invoke("process",
             param("tree", '{"value": "leaf"}')))))
 
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("process",
+            param("tree", "{}")))))
+        self.assertFalse(accepts(self.grammar, tool_call(invoke("process",
+            param("tree", '{"value": 42}')))))
+
     def test_one_level(self):
         self.assertTrue(accepts(self.grammar, tool_call(invoke("process",
             param("tree",
@@ -624,6 +675,18 @@ class TestJsonContext(unittest.TestCase):
         self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
             param("bare", "hi"),
             param("arr", '["a", "b"]')))))
+
+    def test_empty_string(self):
+        """Empty string is allowed."""
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
+            param("bare", ""),
+            param("arr", "[]")))))
+
+    def test_array_strings_escaped(self):
+        """Strings inside JSON arrays must be escaped."""
+        self.assertTrue(accepts(self.grammar, tool_call(invoke("f",
+            param("bare", "hello world"),
+            param("arr", '["Well this is \\"fun\\""]')))))
 
     def test_rejects_unquoted_in_array(self):
         """Unquoted strings inside a JSON array should fail."""
@@ -755,6 +818,9 @@ class TestNoParams(unittest.TestCase):
     def test_accepts(self):
         self.assertTrue(accepts(self.grammar,
             tool_call('<invoke name="ping">\n</invoke>')))
+
+        self.assertFalse(accepts(self.grammar,
+            tool_call(invoke("ping", param("x", "y")))))
 
 
 # ═══════════════════════════════════════════════════════════════════════

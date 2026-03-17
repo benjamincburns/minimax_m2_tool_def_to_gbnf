@@ -435,7 +435,7 @@ def generate_minimax_tool_grammar(
     rules.append("invocation ::= " + " | ".join(invocation_alts))
 
     # Bare string for top-level string parameter values
-    rules.append('bare-string ::= [^<]+')
+    rules.append('bare-string ::= [^<]*')
 
     # Assemble
     all_rules = rules + all_extra_rules + [_JSON_PRIMITIVES]
