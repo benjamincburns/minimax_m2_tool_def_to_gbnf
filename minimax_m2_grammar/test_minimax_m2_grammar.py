@@ -451,6 +451,191 @@ class TestMultipleTools(unittest.TestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Acceptance: multiple invocations (same tool_call) — positive & negative
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestMultipleInvocations(unittest.TestCase):
+    """Tests for multiple <invoke> blocks in a single <minimax:tool_call>.
+
+    Positive: multiple valid invocations (same or different tools).
+    Negative: params valid for tool A used when invoking tool B, wrong param
+    names per tool, missing required params in second invocation, etc.
+    """
+
+    def setUp(self):
+        self.tools = [
+            {
+                "name": "get_weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
+            },
+            {
+                "name": "search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            },
+            {
+                "name": "request.post",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"},
+                        "body": {"type": "string"},
+                    },
+                    "required": ["url", "body"],
+                },
+            },
+        ]
+        self.grammar = generate_minimax_tool_grammar(self.tools)
+
+    # ── Positive: multiple invocations ─────────────────────────────────
+
+    def test_two_invocations_different_tools_valid(self):
+        """Two invocations, each with correct tool and params."""
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("location", "NYC")),
+                    invoke("search", param("query", "weather")),
+                ),
+            )
+        )
+
+    def test_three_invocations_mixed_tools_valid(self):
+        """Three invocations with correct params for each tool."""
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("location", "London")),
+                    invoke("search", param("query", "news")),
+                    invoke(
+                        "request.post",
+                        param("url", "https://api.example.com"),
+                        param("body", "{}"),
+                    ),
+                ),
+            )
+        )
+
+    def test_two_invocations_same_tool_valid(self):
+        """Multiple invocations of the same tool, each with valid params."""
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("search", param("query", "first")),
+                    invoke("search", param("query", "second")),
+                ),
+            )
+        )
+
+    def test_single_invocation_still_valid(self):
+        """Single invocation in tool_call still accepted."""
+        self.assertTrue(
+            accepts(
+                self.grammar,
+                tool_call(invoke("get_weather", param("location", "Paris"))),
+            )
+        )
+
+    # ── Negative: params for tool A used with tool B ────────────────────
+
+    def test_rejects_search_with_location_param(self):
+        """search expects 'query'; using get_weather's 'location' is invalid."""
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("location", "NYC")),
+                    invoke("search", param("location", "NYC")),
+                ),
+            )
+        )
+
+    def test_rejects_get_weather_with_query_param(self):
+        """get_weather expects 'location'; using search's 'query' is invalid."""
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("search", param("query", "hello")),
+                    invoke("get_weather", param("query", "NYC")),
+                ),
+            )
+        )
+
+    def test_rejects_request_post_with_location_and_body(self):
+        """request.post expects 'url' and 'body'; using 'location' (get_weather) is invalid."""
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("request.post", param("location", "NYC"), param("body", "{}")),
+                ),
+            )
+        )
+
+    def test_rejects_get_weather_with_url_and_body_params(self):
+        """get_weather expects 'location'; using request.post's 'url'/'body' is invalid."""
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("url", "x"), param("body", "y")),
+                ),
+            )
+        )
+
+    def test_rejects_second_invocation_wrong_params(self):
+        """First invoke correct; second invoke same tool but wrong param name."""
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("location", "NYC")),
+                    invoke("get_weather", param("query", "Boston")),
+                ),
+            )
+        )
+
+    def test_rejects_mixed_params_on_single_invoke(self):
+        """One invoke with param from tool A and param from tool B."""
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke(
+                        "search",
+                        param("query", "test"),
+                        param("location", "NYC"),
+                    ),
+                ),
+            )
+        )
+
+    def test_rejects_request_post_missing_required_param(self):
+        """request.post requires both url and body; only one is invalid."""
+        self.assertFalse(
+            accepts(
+                self.grammar,
+                tool_call(
+                    invoke("get_weather", param("location", "NYC")),
+                    invoke("request.post", param("url", "https://x.com")),
+                ),
+            )
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Acceptance: value types
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -1660,6 +1845,107 @@ class TestPreamble(unittest.TestCase):
     def test_preamble_accepts_empty(self):
         g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
         self.assertTrue(accepts(g, tool_call(invoke("f", param("x", "hi")))))
+
+    def test_default_rejects_leading_text(self):
+        g = generate_minimax_tool_grammar(self.tools)
+        self.assertFalse(accepts(g, "Sure!\n" + tool_call(invoke("f", param("x", "hi")))))
+
+    def test_preamble_grammar_contains_preamble_rule(self):
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
+        self.assertIn("preamble ::=", g)
+        self.assertIn('preamble "<minimax:tool_call>"', g)
+
+    def test_no_preamble_grammar_has_no_preamble_rule(self):
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=False)
+        self.assertNotIn("preamble ::=", g)
+
+    def test_preamble_accepts_newlines(self):
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
+        self.assertTrue(
+            accepts(g, "Sure!\n\nHere you go:\n" + tool_call(invoke("f", param("x", "hi"))))
+        )
+
+    def test_preamble_stops_at_angle_bracket(self):
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
+        self.assertFalse(
+            accepts(g, "Text with <invalid> tag" + tool_call(invoke("f", param("x", "hi"))))
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Acceptance: require_tool_call
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestRequireToolCall(unittest.TestCase):
+    def setUp(self):
+        self.tools = [
+            {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"x": {"type": "string"}},
+                    "required": ["x"],
+                },
+            }
+        ]
+
+    def test_require_tool_call_true_rejects_empty(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True)
+        empty = "<minimax:tool_call>\n</minimax:tool_call>\n"
+        self.assertFalse(accepts(g, empty))
+
+    def test_require_tool_call_false_accepts_empty(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=False)
+        empty = "<minimax:tool_call>\n</minimax:tool_call>\n"
+        self.assertTrue(accepts(g, empty))
+
+    def test_require_tool_call_true_accepts_one_invocation(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True)
+        self.assertTrue(accepts(g, tool_call(invoke("f", param("x", "hi")))))
+
+    def test_require_tool_call_false_accepts_one_invocation(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=False)
+        self.assertTrue(accepts(g, tool_call(invoke("f", param("x", "hi")))))
+
+    def test_default_requires_tool_call(self):
+        g = generate_minimax_tool_grammar(self.tools)
+        empty = "<minimax:tool_call>\n</minimax:tool_call>\n"
+        self.assertFalse(accepts(g, empty))
+
+    def test_require_tool_call_grammar_has_no_empty_option_when_true(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True)
+        self.assertNotIn('invocations ::= "" |', g)
+
+    def test_require_tool_call_grammar_has_empty_option_when_false(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=False)
+        self.assertIn('invocations ::= "" |', g)
+
+    def test_require_tool_call_true_allow_preamble_true_rejects_preamble_plus_empty(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True, allow_preamble=True)
+        empty_with_preamble = "Sure, here you go.\n" + "<minimax:tool_call>\n</minimax:tool_call>\n"
+        self.assertFalse(accepts(g, empty_with_preamble))
+
+        preamble_no_tags = "Sure, here you go."
+        self.assertFalse(accepts(g, preamble_no_tags))
+
+        empty = ""
+        self.assertFalse(accepts(g, empty))
+
+    def test_require_tool_call_true_allow_preamble_true_accepts_preamble_plus_invocation(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True, allow_preamble=True)
+        self.assertTrue(accepts(g, "Sure!\n" + tool_call(invoke("f", param("x", "hi")))))
+
+    def test_require_tool_call_false_allow_preamble_true_accepts_preamble_plus_empty(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=False, allow_preamble=True)
+        empty_with_preamble = "No tools needed.\n" + "<minimax:tool_call>\n</minimax:tool_call>\n"
+        self.assertTrue(accepts(g, empty_with_preamble))
+
+    def test_require_tool_call_false_allow_preamble_true_accepts_preamble_plus_invocation(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=False, allow_preamble=True)
+        self.assertTrue(
+            accepts(g, "Here is the result.\n" + tool_call(invoke("f", param("x", "hi"))))
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════

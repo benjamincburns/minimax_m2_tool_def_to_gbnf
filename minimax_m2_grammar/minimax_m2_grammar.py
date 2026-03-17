@@ -337,6 +337,7 @@ def generate_minimax_tool_grammar(
     tools: list[dict],
     *,
     allow_preamble: bool = False,
+    require_tool_call: bool = True,
     strict: bool = False,
 ) -> str:
     """Generate a GBNF grammar string from OpenAI-style tool definitions.
@@ -346,6 +347,9 @@ def generate_minimax_tool_grammar(
                ({"type": "function", "function": {...}}) or flat format
                ({"name": "...", "parameters": {...}}).
         allow_preamble: If True, allow free text before the tool call block.
+        require_tool_call: If True (default), at least one <invoke> is required
+                          inside <minimax:tool_call>. If False, empty tool call
+                          (no invocations) is allowed.
         strict: If True, disallow additionalProperties on all objects
                 (matching OpenAI strict mode). If False (default), respect
                 the schema's additionalProperties setting.
@@ -370,7 +374,10 @@ def generate_minimax_tool_grammar(
             'root ::= "<minimax:tool_call>" "\\n" invocations "</minimax:tool_call>" "\\n"'
         )
 
-    rules.append('invocations ::= invocation ("\\n" invocation)*')
+    if require_tool_call:
+        rules.append('invocations ::= invocation ("\\n" invocation)*')
+    else:
+        rules.append('invocations ::= "" | invocation ("\\n" invocation)*')
 
     # Per-tool rules
     all_extra_rules: list[str] = []
