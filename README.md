@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/benjamincburns/minimax_m2_tool_def_to_gbnf/actions/workflows/ci.yml/badge.svg)](https://github.com/benjamincburns/minimax_m2_tool_def_to_gbnf/actions/workflows/ci.yml)
 
+Look, I'm bad at naming things, okay?
+
 Generate **GBNF grammars** for constrained decoding / guided generation with **MiniMax M2 series** models. Given OpenAI-style tool definitions, this library produces a GBNF grammar string that inference providers can use to ensure model output conforms to the MiniMax M2 XML tool-call format.
 
 ## Purpose
@@ -17,8 +19,6 @@ You can feed the generated grammar into any inference stack that supports GBNF-b
 ## Installation
 
 Lul this isn't on pypi yet. If you want it, drop an issue and I'll get it out there.
-
-Requires **Python ≥3.9**. Dependency: [xgrammar](https://pypi.org/project/xgrammar/) (≥0.1.32).
 
 ## Quick start
 
