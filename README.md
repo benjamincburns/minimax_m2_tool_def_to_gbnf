@@ -1,5 +1,7 @@
 # minimax-m2-tool-def-to-gbnf
 
+[![CI](https://github.com/benjamincburns/minimax_m2_tool_def_to_gbnf/actions/workflows/ci.yml/badge.svg)](https://github.com/benjamincburns/minimax_m2_tool_def_to_gbnf/actions/workflows/ci.yml)
+
 Generate **GBNF grammars** for constrained decoding / guided generation with **MiniMax M2 series** models. Given OpenAI-style tool definitions, this library produces a GBNF grammar string that inference providers can use to ensure model output conforms to the MiniMax M2 XML tool-call format.
 
 ## Purpose
