@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = ">=3.13.9"
+requires-python = ">=3.13"
 
 [[package]]
 name = "annotated-doc"
@@ -286,9 +286,9 @@ wheels = [
 ]
 
 [[package]]
-name = "minimax-tool-grammar"
+name = "minimax-m2-tool-def-to-gbnf"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "xgrammar" },
 ]

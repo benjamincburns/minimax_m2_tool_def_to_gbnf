@@ -1,5 +1,5 @@
 """
-Tests for minimax_m2_grammar.py
+Tests for minimax_m2_tool_def_to_gbnf (gbnf.py).
 
 Uses xgrammar to compile grammars and validate strings against them.
 
@@ -10,9 +10,8 @@ Requirements:
 import unittest
 
 import xgrammar as xgr
+from minimax_m2_tool_def_to_gbnf import generate_minimax_tool_grammar
 from xgrammar.testing import _is_grammar_accept_string
-
-from minimax_m2_grammar import generate_minimax_tool_grammar
 
 
 def accepts(grammar_str: str, input_str: str) -> bool:

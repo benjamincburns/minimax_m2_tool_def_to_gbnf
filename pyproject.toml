@@ -1,9 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "minimax-tool-grammar"
+name = "minimax-m2-tool-def-to-gbnf"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13.9"
+requires-python = "<4,>=3.9"
 dependencies = [
     "xgrammar>=0.1.32",
 ]
@@ -15,19 +19,19 @@ dev = [
 ]
 
 [tool.pyright]
-pythonVersion = "3.13"
+pythonVersion = "3.9"
 typeCheckingMode = "standard"
 reportMissingImports = true
 reportMissingTypeStubs = false
 venvPath = "."
 venv = ".venv"
-include = ["minimax_m2_grammar"]
+include = ["minimax_m2_tool_def_to_gbnf"]
 exclude = ["**/__pycache__", ".venv"]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py39"
 line-length = 100
-src = ["minimax_m2_grammar"]
+src = ["minimax_m2_tool_def_to_gbnf"]
 
 [tool.ruff.format]
 quote-style = "double"

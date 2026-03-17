@@ -25,7 +25,7 @@ import argparse
 import timeit
 from typing import Any
 
-from minimax_m2_grammar import generate_minimax_tool_grammar
+from minimax_m2_tool_def_to_gbnf import generate_minimax_tool_grammar
 
 # ── Benchmark tool sets (large/complex) ────────────────────────────────────
 
@@ -280,13 +280,10 @@ def main() -> None:
             (True, False, rtc, f"preamble, require_tool_call={rtc}") for rtc in (True, False)
         ]
     elif args.strict:
-        configs = [
-            (False, True, rtc, f"strict, require_tool_call={rtc}") for rtc in (True, False)
-        ]
+        configs = [(False, True, rtc, f"strict, require_tool_call={rtc}") for rtc in (True, False)]
     elif args.preamble_strict:
         configs = [
-            (True, True, rtc, f"preamble-strict, require_tool_call={rtc}")
-            for rtc in (True, False)
+            (True, True, rtc, f"preamble-strict, require_tool_call={rtc}") for rtc in (True, False)
         ]
     elif args.require_tool_call:
         configs = make_configs(True)
