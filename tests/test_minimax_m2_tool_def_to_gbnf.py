@@ -11,15 +11,29 @@ import unittest
 
 import xgrammar as xgr
 from minimax_m2_tool_def_to_gbnf import generate_minimax_tool_grammar
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import (
+    _get_masked_tokens_from_bitmask,
+    _get_matcher_from_grammar_and_tokenizer_info,
+)
+
+from .tokenizer import minimax_tokenizer
+
+tokenizer_info = xgr.TokenizerInfo.from_huggingface(minimax_tokenizer)
+compiler = xgr.GrammarCompiler(tokenizer_info)
 
 
 def accepts(grammar_str: str, input_str: str) -> bool:
-    return _is_grammar_accept_string(grammar_str, input_str)
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar_str, tokenizer_info)
+    tokens = minimax_tokenizer.encode(input_str)
+    for token in tokens:
+        if not matcher.accept_token(token):
+            return False
+    return matcher.accept_token(tokenizer_info.stop_token_ids[-1])
 
 
-def compiles(grammar_str: str) -> xgr.Grammar:
-    return xgr.Grammar.from_ebnf(grammar_str)
+def compiles(grammar_str: str) -> xgr.CompiledGrammar:
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    return compiler.compile_grammar(grammar)
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -1839,7 +1853,7 @@ class TestPreamble(unittest.TestCase):
         self.assertTrue(accepts(g, "Sure!" + tool_call(invoke("f", param("x", "hi")))))
 
     def test_preamble_accepts_leading_text_with_tag(self):
-        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True, require_tool_call=True)
         self.assertTrue(
             accepts(g, "Sure! This is <i>awesome</i>!" + tool_call(invoke("f", param("x", "hi"))))
         )
@@ -2306,13 +2320,8 @@ class TestKnownLimitations(unittest.TestCase):
         self.assertFalse(accepts(grammar, s))
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Determinism
-# ═══════════════════════════════════════════════════════════════════════
-
-
-class TestDeterminism(unittest.TestCase):
-    def test_same_output(self):
+class TestTokenMatching(unittest.TestCase):
+    def setUp(self):
         tools = [
             {
                 "name": "f",
@@ -2323,9 +2332,144 @@ class TestDeterminism(unittest.TestCase):
                 },
             }
         ]
-        g1 = generate_minimax_tool_grammar(tools)
-        g2 = generate_minimax_tool_grammar(tools)
-        self.assertEqual(g1, g2)
+
+        self.g = generate_minimax_tool_grammar(tools)
+        self.g_no_preamble = generate_minimax_tool_grammar(tools, allow_preamble=False)
+        self.g_no_preamble_tool_call_required = generate_minimax_tool_grammar(
+            tools, allow_preamble=False, require_tool_call=True
+        )
+        self.c = compiles(self.g)
+        start_tool_call_token_seq = minimax_tokenizer.encode("<minimax:tool_call>")
+        end_tool_call_token_seq = minimax_tokenizer.encode("</minimax:tool_call>")
+
+        self.assertTrue(len(start_tool_call_token_seq) == len(end_tool_call_token_seq) == 1)
+
+        self.start_tool_call_token = start_tool_call_token_seq[0]
+        self.end_tool_call_token = end_tool_call_token_seq[0]
+        self.assertTrue(self.start_tool_call_token != self.end_tool_call_token)
+        self.assertTrue(self.start_tool_call_token == 200052)
+        self.assertTrue(self.end_tool_call_token == 200053)
+
+    def test_accepts_correct_tool_call_tokens_with_preamble(self):
+        matcher = _get_matcher_from_grammar_and_tokenizer_info(self.g, tokenizer_info)
+
+        message = "Hello, world!"
+        tokens = minimax_tokenizer.encode(message)
+        for token in tokens:
+            self.assertTrue(matcher.accept_token(token))
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is allowed
+        self.assertFalse(self.start_tool_call_token in masked_tokens)
+
+        # start the toolcall
+        self.assertTrue(matcher.accept_token(self.start_tool_call_token))
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is NOT allowed
+        self.assertTrue(self.start_tool_call_token in masked_tokens)
+
+        # now apply the invoke
+        invoke_str = invoke("f", param("a", "b"))
+        tokens = minimax_tokenizer.encode(f"\n{invoke_str}")
+        for token in tokens:
+            self.assertTrue(matcher.accept_token(token))
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is still NOT allowed
+        self.assertTrue(self.start_tool_call_token in masked_tokens)
+
+        # make sure that end tool call token is allowed
+        self.assertTrue(matcher.accept_token(self.end_tool_call_token))
+
+    def test_accepts_correct_tool_call_tokens_without_preamble(self):
+        matcher = _get_matcher_from_grammar_and_tokenizer_info(self.g_no_preamble, tokenizer_info)
+
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is allowed
+        self.assertFalse(self.start_tool_call_token in masked_tokens)
+
+        # start the toolcall
+        self.assertTrue(matcher.accept_token(self.start_tool_call_token))
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is NOT allowed
+        self.assertTrue(self.start_tool_call_token in masked_tokens)
+
+        # now apply the invoke
+        invoke_str = invoke("f", param("a", "b"))
+        tokens = minimax_tokenizer.encode(f"\n{invoke_str}")
+        for token in tokens:
+            self.assertTrue(matcher.accept_token(token))
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is still NOT allowed
+        self.assertTrue(self.start_tool_call_token in masked_tokens)
+
+        # make sure that end tool call token is allowed
+        self.assertTrue(matcher.accept_token(self.end_tool_call_token))
+
+    def test_requires_tool_call_token_without_preamble(self):
+        matcher = _get_matcher_from_grammar_and_tokenizer_info(self.g_no_preamble, tokenizer_info)
+
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is allowed
+        self.assertFalse(self.start_tool_call_token in masked_tokens)
+
+        # only "<", "<m", and "<minimax:tool_call>" should be allowed
+        self.assertTrue(len(masked_tokens) == tokenizer_info.vocab_size - 3)
+
+        # start the toolcall
+        self.assertTrue(matcher.accept_token(self.start_tool_call_token))
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is NOT allowed
+        self.assertTrue(self.start_tool_call_token in masked_tokens)
+
+        # now apply the invoke
+        invoke_str = invoke("f", param("a", "b"))
+        tokens = minimax_tokenizer.encode(f"\n{invoke_str}")
+        for token in tokens:
+            self.assertTrue(matcher.accept_token(token))
+
+        needs_apply = matcher.fill_next_token_bitmask(bitmask)
+        self.assertTrue(needs_apply)
+        masked_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+        # make sure that start tool call token is still NOT allowed
+        self.assertTrue(self.start_tool_call_token in masked_tokens)
+
+        # make sure that end tool call token is allowed
+        self.assertTrue(matcher.accept_token(self.end_tool_call_token))
 
 
 if __name__ == "__main__":
