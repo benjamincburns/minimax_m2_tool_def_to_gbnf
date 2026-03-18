@@ -282,11 +282,8 @@ class TestSimpleAcceptance(unittest.TestCase):
         s = tool_call(invoke("get_temp", param("location", "Berlin"), param("unit", "celsius")))
         self.assertFalse(accepts(self.grammar, s))
 
-    def test_rejects_empty_block(self):
-        self.assertFalse(accepts(self.grammar, "<minimax:tool_call>\n</minimax:tool_call>\n"))
-
-    def test_rejects_bare_text(self):
-        self.assertFalse(accepts(self.grammar, "Hello world"))
+    def test_accepts_empty_block(self):
+        self.assertTrue(accepts(self.grammar, "<minimax:tool_call>\n</minimax:tool_call>\n"))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1841,33 +1838,155 @@ class TestPreamble(unittest.TestCase):
         g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
         self.assertTrue(accepts(g, "Sure!" + tool_call(invoke("f", param("x", "hi")))))
 
+    def test_preamble_accepts_leading_text_with_tag(self):
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
+        self.assertTrue(
+            accepts(g, "Sure! This is <i>awesome</i>!" + tool_call(invoke("f", param("x", "hi"))))
+        )
+
+        g_standalone = generate_minimax_tool_grammar(
+            self.tools, allow_preamble=True, require_tool_call=False
+        )
+        self.assertTrue(accepts(g_standalone, "Sure! This is <i>awesome</i>!"))
+        self.assertTrue(
+            accepts(
+                g_standalone,
+                "Sure! This is <i>awesome</i>!" + tool_call(invoke("f", param("x", "hi"))),
+            )
+        )
+
+    def test_preamble_accepts_leading_text_with_partial_tool_call_tag_up_to_closing_bracket(self):
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True, require_tool_call=True)
+        g_standalone = generate_minimax_tool_grammar(
+            self.tools, allow_preamble=True, require_tool_call=False
+        )
+
+        acceptable_part_tag = "<minimax:tool_call"
+
+        # test preambles that include every prefix of the acceptable_part_tag with trailing chars
+        # that are not `>`:
+        for i in range(len(acceptable_part_tag)):
+            prefix = acceptable_part_tag[:i]
+            self.assertTrue(
+                accepts(
+                    g_standalone,
+                    f"some text here {prefix} some more text here><"
+                    + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+
+            self.assertTrue(accepts(g_standalone, f"some text here {prefix} some more text here><"))
+            self.assertTrue(accepts(g_standalone, f"some text here {prefix}"))
+            self.assertTrue(
+                accepts(
+                    g_standalone,
+                    f"some text here {prefix}" + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+            self.assertTrue(
+                accepts(
+                    g,
+                    f"some text here {prefix} some more text here><\n"
+                    + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+            self.assertTrue(
+                accepts(
+                    g,
+                    f"some text here {prefix}\n" + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+            self.assertTrue(
+                accepts(
+                    g,
+                    f"some text here {prefix} some more text here>< "
+                    + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+            self.assertTrue(
+                accepts(
+                    g,
+                    f"some text here {prefix} " + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+            self.assertTrue(
+                accepts(
+                    g,
+                    f"some text here {prefix} some more text here>"
+                    + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+            self.assertTrue(
+                accepts(
+                    g,
+                    f"some text here {prefix}xx" + tool_call(invoke("f", param("x", "hi"))),
+                )
+            )
+
+    def test_preamble_rejects_leading_text_with_tool_call_start_tag_and_invalid_tool_call_content(
+        self,
+    ):
+        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
+        self.assertFalse(
+            accepts(
+                g,
+                "some text here <minimax:tool_call><totally invalid content></minimax:tool_call>",
+            )
+        )
+        self.assertFalse(
+            accepts(
+                g,
+                "\n".join(
+                    [
+                        "some text here",
+                        "<minimax:tool_call>",
+                        "<totally invalid content>",
+                        "</minimax:tool_call>",
+                    ]
+                ),
+            )
+        )
+        self.assertFalse(
+            accepts(
+                g,
+                "\n".join(
+                    [
+                        "some text here",
+                        "<minimax:tool_call>",
+                        tool_call(invoke("f", param("x", "hi"))),
+                    ]
+                ),
+            )
+        )
+        self.assertFalse(
+            accepts(
+                g,
+                "some text here\n<minimax:tool_call>" + tool_call(invoke("f", param("x", "hi"))),
+            )
+        )
+        self.assertFalse(
+            accepts(
+                g,
+                "some text here <minimax:tool_call>" + tool_call(invoke("f", param("x", "hi"))),
+            )
+        )
+
     def test_preamble_accepts_empty(self):
         g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
         self.assertTrue(accepts(g, tool_call(invoke("f", param("x", "hi")))))
 
-    def test_default_rejects_leading_text(self):
+    def test_default_allows_bare_text(self):
         g = generate_minimax_tool_grammar(self.tools)
-        self.assertFalse(accepts(g, "Sure!\n" + tool_call(invoke("f", param("x", "hi")))))
+        self.assertTrue(accepts(g, "Hello world"))
 
-    def test_preamble_grammar_contains_preamble_rule(self):
-        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
-        self.assertIn("preamble ::=", g)
-        self.assertIn('preamble "<minimax:tool_call>"', g)
-
-    def test_no_preamble_grammar_has_no_preamble_rule(self):
-        g = generate_minimax_tool_grammar(self.tools, allow_preamble=False)
-        self.assertNotIn("preamble ::=", g)
+    def test_default_allows_leading_text(self):
+        g = generate_minimax_tool_grammar(self.tools)
+        self.assertTrue(accepts(g, "Sure!\n" + tool_call(invoke("f", param("x", "hi")))))
 
     def test_preamble_accepts_newlines(self):
         g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
         self.assertTrue(
             accepts(g, "Sure!\n\nHere you go:\n" + tool_call(invoke("f", param("x", "hi"))))
-        )
-
-    def test_preamble_stops_at_angle_bracket(self):
-        g = generate_minimax_tool_grammar(self.tools, allow_preamble=True)
-        self.assertFalse(
-            accepts(g, "Text with <invalid> tag" + tool_call(invoke("f", param("x", "hi"))))
         )
 
 
@@ -1907,29 +2026,30 @@ class TestRequireToolCall(unittest.TestCase):
         g = generate_minimax_tool_grammar(self.tools, require_tool_call=False)
         self.assertTrue(accepts(g, tool_call(invoke("f", param("x", "hi")))))
 
-    def test_default_requires_tool_call(self):
+    def test_default_does_not_require_tool_call(self):
         g = generate_minimax_tool_grammar(self.tools)
-        empty = "<minimax:tool_call>\n</minimax:tool_call>\n"
-        self.assertFalse(accepts(g, empty))
-
-    def test_require_tool_call_grammar_has_no_empty_option_when_true(self):
-        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True)
-        self.assertNotIn('invocations ::= "" |', g)
-
-    def test_require_tool_call_grammar_has_empty_option_when_false(self):
-        g = generate_minimax_tool_grammar(self.tools, require_tool_call=False)
-        self.assertIn('invocations ::= "" |', g)
+        empty = "Hello world!"
+        self.assertTrue(accepts(g, empty))
 
     def test_require_tool_call_true_allow_preamble_true_rejects_preamble_plus_empty(self):
         g = generate_minimax_tool_grammar(self.tools, require_tool_call=True, allow_preamble=True)
         empty_with_preamble = "Sure, here you go.\n" + "<minimax:tool_call>\n</minimax:tool_call>\n"
         self.assertFalse(accepts(g, empty_with_preamble))
 
-        preamble_no_tags = "Sure, here you go."
-        self.assertFalse(accepts(g, preamble_no_tags))
+    def test_require_tool_call_true_allow_preamble_true_rejects_preamble_without_tool_call(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True, allow_preamble=True)
+        preamble_no_tool_call = "Sure, here you go."
+        self.assertFalse(accepts(g, preamble_no_tool_call))
 
+    def test_require_tool_call_true_allow_preamble_true_rejects_empty_string(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True, allow_preamble=True)
         empty = ""
         self.assertFalse(accepts(g, empty))
+
+    def test_require_tool_call_true_allow_preamble_true_allows_tool_call_without_preamble(self):
+        g = generate_minimax_tool_grammar(self.tools, require_tool_call=True, allow_preamble=True)
+        tool_call_without_preamble = tool_call(invoke("f", param("x", "hi")))
+        self.assertTrue(accepts(g, tool_call_without_preamble))
 
     def test_require_tool_call_true_allow_preamble_true_accepts_preamble_plus_invocation(self):
         g = generate_minimax_tool_grammar(self.tools, require_tool_call=True, allow_preamble=True)

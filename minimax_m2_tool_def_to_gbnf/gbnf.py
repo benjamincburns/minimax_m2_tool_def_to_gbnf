@@ -330,14 +330,60 @@ def _object_rule_for_schema(
     return rule_name
 
 
+# ── Preamble rules for excluding <minimax:tool_call> ─────────────────────
+
+_TOOL_TAG = "<minimax:tool_call>"
+_TOOL_TAG_SUFFIX = _TOOL_TAG[1:]  # "minimax:tool_call>"
+
+
+def _preamble_rules() -> list[str]:
+    """GBNF rules for preamble text that cannot consume '<minimax:tool_call>'.
+
+    The ``pnt-after-lt`` rule matches ``<`` followed by characters that diverge
+    from ``minimax:tool_call>`` at each position.  When the exact forbidden
+    suffix follows ``<``, every alternative fails and ``pnt-char`` fails,
+    so the preamble stops just before that ``<``.
+    """
+    alts: list[str] = []
+    for i in range(len(_TOOL_TAG_SUFFIX)):
+        prefix = _TOOL_TAG_SUFFIX[:i]
+        reject = _TOOL_TAG_SUFFIX[i]
+        if prefix:
+            alts.append(f'"{_escape_gbnf_string(prefix)}" [^{reject}]')
+        else:
+            alts.append(f"[^{reject}]")
+    return [
+        "preamble ::= pnt-char*",
+        "preamble-standalone ::= pnt-char+",
+        'pnt-char ::= [^<] | "<" pnt-after-lt',
+        "pnt-after-lt ::= " + " | ".join(alts),
+    ]
+
+
+def _standalone_root_alternatives() -> list[str]:
+    """Root-rule alternatives for standalone preamble (no tool call block).
+
+    Because ``pnt-char`` cannot consume ``<`` when it starts the forbidden
+    tag ``<minimax:tool_call>``, a string ending with a *partial* prefix of
+    that tag (e.g. ``hello<mini``) would leave the prefix unconsumed.
+    We enumerate every proper prefix of the tag as an explicit suffix
+    after ``preamble-standalone`` so those strings are still accepted.
+    """
+    alts = ["preamble-standalone"]
+    for length in range(1, len(_TOOL_TAG)):
+        prefix = _TOOL_TAG[:length]
+        alts.append(f'preamble-standalone "{_escape_gbnf_string(prefix)}"')
+    return alts
+
+
 # ── Top-level grammar generation ────────────────────────────────────────
 
 
 def generate_minimax_tool_grammar(
     tools: list[dict],
     *,
-    allow_preamble: bool = False,
-    require_tool_call: bool = True,
+    allow_preamble: bool = True,
+    require_tool_call: bool = False,
     strict: bool = False,
 ) -> str:
     """Generate a GBNF grammar string from OpenAI-style tool definitions.
@@ -346,13 +392,14 @@ def generate_minimax_tool_grammar(
         tools: List of tool definitions, either in OpenAI format
                ({"type": "function", "function": {...}}) or flat format
                ({"name": "...", "parameters": {...}}).
-        allow_preamble: If True, allow free text before the tool call block.
-        require_tool_call: If True (default), at least one <invoke> is required
-                          inside <minimax:tool_call>. If False, empty tool call
-                          (no invocations) is allowed.
+        allow_preamble: If True (default), allow free text before the tool call
+               block. If False, disallow free text before the tool call block.
+        require_tool_call: If True, at least one <invoke> is required inside
+               <minimax:tool_call>. If False (default), empty tool call (no
+               invocations) is allowed.
         strict: If True, disallow additionalProperties on all objects
-                (matching OpenAI strict mode). If False (default), respect
-                the schema's additionalProperties setting.
+               (matching OpenAI strict mode). If False (default), respect
+               the schema's additionalProperties setting.
 
     Returns:
         A GBNF grammar string suitable for StructuredOutputsParams(grammar=...).
@@ -365,10 +412,16 @@ def generate_minimax_tool_grammar(
 
     # Root rule
     if allow_preamble:
-        rules.append(
-            'root ::= preamble "<minimax:tool_call>" "\\n" invocations "</minimax:tool_call>" "\\n"'
+        tool_call_alt = (
+            'preamble "<minimax:tool_call>" "\\n" invocations "</minimax:tool_call>" "\\n"'
         )
-        rules.append("preamble ::= [^<]*")
+        if require_tool_call:
+            rules.append("root ::= " + tool_call_alt)
+        else:
+            standalone_alts = _standalone_root_alternatives()
+            all_alts = standalone_alts + [tool_call_alt]
+            rules.append("root ::= " + " | ".join(all_alts))
+        rules.extend(_preamble_rules())
     else:
         rules.append(
             'root ::= "<minimax:tool_call>" "\\n" invocations "</minimax:tool_call>" "\\n"'
